@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es-SV">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="El Código del Café — escape room. Sala de juego: 5 estaciones, cronómetro y veredicto.">
+  <title>El Código del Café — Juego</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!--
+    CONTRACT §14.4 — Todo texto de persona (nombres, correos, carnés, equipo) se pinta con textContent.
+    Nunca innerHTML / insertAdjacentHTML / outerHTML con datos dinámicos.
+    Inline styles prohibidos salvo style.width de #barra-progreso-relleno y hidden (§15).
+  -->
+  <a class="skip-link" href="#contenido-principal">Saltar al contenido</a>
+
+  <header>
+    <div class="contenedor">
+      <p class="badge badge--acento" aria-hidden="true">CGC · Expediente en curso</p>
+      <h1>El Código del Café</h1>
+    </div>
+  </header>
+
+  <!-- Aviso de conexión — fuera de main para ser visible siempre, incluso con modal -->
+  <div id="aviso-conexion" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span aria-hidden="true">⚠</span>
+    <span>Sin conexión. Tu progreso ya guardado no se pierde.</span>
+  </div>
+
+  <!-- Barra superior persistente — cronómetro + progreso, se oculta con aria-hidden+inert cuando modal abre -->
+  <div id="barra-superior" role="region" aria-label="Progreso y tiempo">
+    <span class="barra-superior__tiempo">
+      <span aria-hidden="true">⏱</span>
+      <span id="cronometro" aria-hidden="true">50:00</span>
+      <span id="cronometro-anuncio" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span>
+    </span>
+
+    <div
+      id="barra-progreso"
+      role="progressbar"
+      aria-valuemin="0"
+      aria-valuemax="5"
+      aria-valuenow="0"
+      aria-valuetext="0 de 5 estaciones"
+      aria-labelledby="barra-progreso-label"
+    >
+      <div id="barra-progreso-relleno" style="width: 0%" aria-hidden="true"></div>
+    </div>
+    <span id="contador-progreso" aria-hidden="true">0 / 5</span>
+    <span id="barra-progreso-label" class="sr-only">Progreso del equipo</span>
+    <span id="nombre-equipo-activo" class="campo__ayuda" aria-live="polite"></span>
+  </div>
+
+  <main id="contenido-principal">
+
+    <!-- #pantalla-bienvenida — sala de espera: nombre del equipo, integrantes, #btn-iniciar -->
+    <section id="pantalla-bienvenida" role="region" aria-labelledby="bienvenida-titulo">
+      <header>
+        <h2 id="bienvenida-titulo" tabindex="-1">Sala de espera</h2>
+        <p class="campo__ayuda">Esperá a que tu docente complete los equipos. Cuando veas tu equipo, iniciá el cronómetro compartido.</p>
+      </header>
+
+      <div class="campo">
+        <h3 id="bienvenida-equipo-nombre">Equipo: —</h3>
+        <ul id="lista-integrantes-bienvenida" aria-label="Integrantes del equipo" role="list"></ul>
+      </div>
+
+      <button id="btn-iniciar" class="btn btn--primario" type="button">Iniciar auditoría</button>
+    </section>
+
+    <!-- #sin-equipo — caso normal: aún no asignado, nunca pantalla rota -->
+    <section id="sin-equipo" role="region" aria-labelledby="sin-equipo-titulo" hidden>
+      <h2 id="sin-equipo-titulo">Tu docente aún no te asignó equipo</h2>
+      <p><span aria-hidden="true">⏳</span> Cuando te asigne, esta pantalla mostrará tu equipo y podrás iniciar. No es un error — avisá a tu docente si tarda.</p>
+    </section>
+
+    <!-- #pantalla-dashboard — 5 tarjetas + progreso -->
+    <section id="pantalla-dashboard" role="region" aria-labelledby="dashboard-titulo" hidden>
+      <header>
+        <h2 id="dashboard-titulo" tabindex="-1">Dashboard de la auditoría</h2>
+        <p class="campo__ayuda">Cinco estaciones. La quinta se desbloquea al resolver las cuatro primeras. Cada acierto revela un fragmento del código maestro.</p>
+      </header>
+
+      <ul id="lista-estaciones" role="list" aria-label="Estaciones del escape room">
+        <li role="listitem">
+          <div class="estacion-card is-pendiente" data-estacion="1" role="button" tabindex="0" aria-expanded="false" aria-describedby="estado-estacion-1">
+            <span class="estacion-card__numero">Estación 1</span>
+            <h3 class="estacion-card__titulo">La cadena del café</h3>
+            <p class="estacion-card__pilar">Pilar: trazabilidad</p>
+            <span id="estado-estacion-1" class="estacion-card__estado">Pendiente</span>
+          </div>
+        </li>
+        <li role="listitem">
+          <div class="estacion-card is-pendiente" data-estacion="2" role="button" tabindex="0" aria-expanded="false" aria-describedby="estado-estacion-2">
+            <span class="estacion-card__numero">Estación 2</span>
+            <h3 class="estacion-card__titulo">Huellas y espejismos</h3>
+            <p class="estacion-card__pilar">Pilar: agua — huella hídrica</p>
+            <span id="estado-estacion-2" class="estacion-card__estado">Pendiente</span>
+          </div>
+        </li>
+        <li role="listitem">
+          <div class="estacion-card is-pendiente" data-estacion="3" role="button" tabindex="0" aria-expanded="false" aria-describedby="estado-estacion-3">
+            <span class="estacion-card__numero">Estación 3</span>
+            <h3 class="estacion-card__titulo">El reparto de los $4.00</h3>
+            <p class="estacion-card__pilar">Pilar: valor económico</p>
+            <span id="estado-estacion-3" class="estacion-card__estado">Pendiente</span>
+          </div>
+        </li>
+        <li role="listitem">
+          <div class="estacion-card is-pendiente" data-estacion="4" role="button" tabindex="0" aria-expanded="false" aria-describedby="estado-estacion-4">
+            <span class="estacion-card__numero">Estación 4</span>
+            <h3 class="estacion-card__titulo">Voces invisibles</h3>
+            <p class="estacion-card__pilar">Pilar: personas — trabajo y cuidado</p>
+            <span id="estado-estacion-4" class="estacion-card__estado">Pendiente</span>
+          </div>
+        </li>
+        <li role="listitem">
+          <div class="estacion-card is-bloqueada" data-estacion="5" role="button" tabindex="-1" aria-expanded="false" aria-disabled="true" aria-describedby="estado-estacion-5">
+            <span class="estacion-card__numero">Estación 5</span>
+            <h3 class="estacion-card__titulo">El discurso y la evidencia</h3>
+            <p class="estacion-card__pilar">Pilar: veredicto — comunicación verificable</p>
+            <span id="estado-estacion-5" class="estacion-card__estado">Bloqueada</span>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Modal de estación — foco atrapado, Esc cierra, backdrop click cierra -->
+    <div id="modal-backdrop" hidden aria-hidden="true"></div>
+
+    <section id="modal-estacion" role="dialog" aria-modal="true" aria-labelledby="modal-estacion-titulo" aria-describedby="modal-estacion-descripcion" hidden>
+      <div class="modal__panel">
+        <button id="btn-cerrar-modal" class="btn btn--ghost" type="button" aria-label="Cerrar" title="Cerrar (Esc)">✕</button>
+
+        <h2 id="modal-estacion-titulo" tabindex="-1">Estación</h2>
+
+        <div id="modal-estacion-descripcion">
+          <div id="estacion-narrativa">
+            <p class="campo__ayuda">Narrativa del caso — cargada desde estaciones_publicas.</p>
+          </div>
+
+          <div id="estacion-datos" role="region" aria-label="Datos del expediente"></div>
+
+          <div id="estacion-reto">
+            <p id="estacion-reto-texto"><strong>Reto:</strong> —</p>
+          </div>
+
+          <div id="estacion-interaccion" role="region" aria-label="Interacción de la estación">
+            <!-- Render dinámico por tipo: orden (↑/↓), numero, checklist, clasificacion.
+                 JS pinta con textContent; sin innerHTML. Controles con label for/id. -->
+          </div>
+        </div>
+
+        <div id="estacion-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <span id="estacion-intentos" aria-live="polite" aria-atomic="true"></span>
+
+        <div class="modal__acciones">
+          <button id="btn-verificar-estacion" class="btn btn--primario" type="button">Verificar</button>
+          <button class="btn btn--ghost" type="button" onclick="document.getElementById('modal-estacion').setAttribute('hidden','')">Cancelar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fragmentos de código — 5 items, placeholder — cuando resuelta muestra código -->
+    <section aria-labelledby="fragmentos-titulo">
+      <h3 id="fragmentos-titulo" class="campo__label">Fragmentos del código maestro</h3>
+      <ol id="fragmentos-codigo" role="list" aria-label="Fragmentos de código obtenidos">
+        <li role="listitem" data-estacion="1" data-obtenido="false" aria-label="Fragmento 1 aún no obtenido">—</li>
+        <li role="listitem" data-estacion="2" data-obtenido="false" aria-label="Fragmento 2 aún no obtenido">—</li>
+        <li role="listitem" data-estacion="3" data-obtenido="false" aria-label="Fragmento 3 aún no obtenido">—</li>
+        <li role="listitem" data-estacion="4" data-obtenido="false" aria-label="Fragmento 4 aún no obtenido">—</li>
+        <li role="listitem" data-estacion="5" data-obtenido="false" aria-label="Fragmento 5 aún no obtenido">—</li>
+      </ol>
+    </section>
+
+    <!-- #pantalla-veredicto — entrada del código maestro -->
+    <section id="pantalla-veredicto" role="region" aria-labelledby="veredicto-titulo">
+      <h2 id="veredicto-titulo" tabindex="-1">Veredicto de auditoría</h2>
+      <p class="campo__ayuda" id="codigo-maestro-ayuda">Ingresá el código maestro formado por los 5 fragmentos (ej. 06-87-04-2P-4). Se normaliza: mayúsculas, espacios y guiones son opcionales.</p>
+
+      <div class="veredicto__codigo">
+        <label class="campo__label" for="input-codigo-maestro">Código maestro</label>
+        <input
+          id="input-codigo-maestro"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          aria-describedby="codigo-maestro-ayuda feedback-maestro"
+          aria-invalid="false"
+          placeholder="06-87-04-2P-4"
+        >
+        <button id="btn-verificar-maestro" class="btn btn--primario" type="button" aria-describedby="feedback-maestro">Verificar código</button>
+        <div id="feedback-maestro" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </div>
+
+      <div id="texto-veredicto" hidden>
+        <h3>Veredicto</h3>
+        <p>El discurso de CGC no está respaldado por la evidencia del expediente. El informe muestra brechas en trazabilidad, agua, reparto de valor y reconocimiento del cuidado. Un veredicto sólido cita el dato que lo sustenta — revisá el feedback de cada estación.</p>
+      </div>
+    </section>
+
+    <!-- #pantalla-resumen — desempeño post-juego -->
+    <section id="pantalla-resumen" role="region" aria-labelledby="resumen-titulo">
+      <h2 id="resumen-titulo" tabindex="-1">Resumen de la auditoría</h2>
+      <dl id="resumen-datos">
+        <dt>Equipo</dt>
+        <dd id="resumen-equipo">—</dd>
+        <dt>Estaciones resueltas</dt>
+        <dd id="resumen-resueltas">—</dd>
+        <dt>Intentos totales</dt>
+        <dd id="resumen-intentos">—</dd>
+        <dt>Tiempo usado</dt>
+        <dd id="resumen-tiempo">—</dd>
+        <dt>Motivo de cierre</dt>
+        <dd id="resumen-motivo">—</dd>
+      </dl>
+      <div class="resumen__acciones">
+        <a class="btn btn--ghost" href="index.html">Volver al inicio</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="contenedor">
+      <p class="campo__ayuda">CGC no es villana: es una empresa cuyo discurso no está respaldado. Auditar es distinguir dato de relato.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/juego.js"></script>
+  <script type="module" src="js/timer.js"></script>
+  <script type="module" src="js/render.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+services:
+  scaperoom:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./juego.html:/usr/share/nginx/html/juego.html:ro
+      - ./docente.html:/usr/share/nginx/html/docente.html:ro
+      - ./styles.css:/usr/share/nginx/html/styles.css:ro
+      - ./js:/usr/share/nginx/html/js:ro
+    restart: unless-stopped

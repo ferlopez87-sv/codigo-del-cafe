@@ -1,0 +1,17 @@
+# Secretos — nunca versionar
+.env
+.env.*
+!.env.ejemplo
+*.key
+*.pem
+
+# Supabase CLI
+.supabase/
+supabase/.temp/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Andamiaje temporal del harness (se borra al integrar)
+_src/

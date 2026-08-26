@@ -1,0 +1,1888 @@
+/* ==========================================================================
+   tokens.css — El Código del Café (CGC)
+   Design System: expediente confidencial · fondo oscuro #0f1410 + ámbar #d99a2b + verde OKLCH
+   Vanilla CSS plano · sin frameworks, sin CDN, sin Google Fonts
+   Skills: impeccable (jerarquía), ui-ux-pro-max (paleta/par tipográfico),
+           high-end-visual-design (no crema genérico), design-system (tokens)
+   ==========================================================================
+   Contraste WCAG 2.1 — fondo base #0f1410 (oklch ~14% L) — recalculado
+   (umbral: 4.5:1 texto normal, 3:1 texto grande ≥24px / 18.66px bold)
+
+   texto #ede9e3 / fondo #0f1410              = 15.40:1  ✓ AAA
+   texto-suave #c2beba / fondo #0f1410        = 10.08:1  ✓ AAA
+   texto-tenue #9a9590 / fondo #0f1410        =  6.27:1  ✓ AA
+   texto #ede9e3 / fondo-elevado #1c211d      = 13.52:1  ✓ AAA
+   texto #ede9e3 / fondo-modal #232822        = 12.42:1  ✓ AAA
+   acento #d99a2b / fondo #0f1410             =  7.63:1  ✓ AAA (borde/icono)
+   fondo #0f1410 / acento #d99a2b (texto #0f1410 sobre ámbar) = 7.63:1  ✓ AA
+   texto #ede9e3 / acento-suave #2b2416       = 12.71:1  ✓ AAA
+   éxito #34c266 / fondo #0f1410              =  8.03:1  ✓ AAA
+   texto #ede9e3 / éxito-fondo #10291a        = 12.82:1  ✓ AAA
+   error #e05241 / fondo #0f1410              =  4.83:1  ✓ AA
+   texto #ede9e3 / error-fondo #2e1a14        = 13.63:1  ✓ AAA
+   alerta #d9a441 / fondo #0f1410             =  8.28:1  ✓ AAA
+   texto #ede9e3 / alerta-fondo #2d2410       = 12.66:1  ✓ AAA
+   bloqueado #6b6e6b / fondo #0f1410          =  3.61:1  ✓ solo borde/ícono decorativo (≥3:1) + texto requerido §13
+   ─ Todos ≥4.5:1 salvo bloqueado (uso no-texto-only + icono+texto obligatorio)
+   ─ OKLCH equivalentes documentados abajo; hex es fallback universal.
+   ========================================================================== */
+
+:root {
+  /* Superficies — expediente oscuro (high-end-visual-design: no crema/sand) */
+  --color-fondo: #0f1410;
+  --color-fondo-elevado: #1c211d;
+  --color-fondo-modal: #232822;
+  /* OKLCH (modern) — mismas superficies, más perceptualmente uniforme */
+  --color-fondo-oklch: oklch(0.155 0.02 148);
+  --color-fondo-elevado-oklch: oklch(0.195 0.02 148);
+  --color-fondo-modal-oklch: oklch(0.215 0.02 148);
+
+  /* Bordes — elevación sutil sobre oscuro */
+  --color-borde: #2e3430;
+  --color-borde-fuerte: #3d4640;
+  --color-borde-oklch: oklch(0.32 0.02 148);
+  --color-borde-fuerte-oklch: oklch(0.38 0.02 148);
+
+  /* Texto — cálido sobre oscuro (reduce halo en proyector, impeccable) */
+  --color-texto: #ede9e3;
+  --color-texto-suave: #c2beba;
+  --color-texto-tenue: #9a9590;
+
+  /* Acento — café/ámbar tostado CGC (marca expediente) */
+  --color-acento: #d99a2b;
+  --color-acento-suave: #2b2416;
+  --color-acento-oklch: oklch(0.74 0.14 72);
+  --color-acento-suave-oklch: oklch(0.24 0.03 72);
+
+  /* Semánticos */
+  --color-exito: #34c266;
+  --color-exito-fondo: #10291a;
+  --color-exito-oklch: oklch(0.68 0.16 145);
+  --color-error: #e05241;
+  --color-error-fondo: #2e1a14;
+  --color-alerta: #d9a441;
+  --color-alerta-fondo: #2d2410;
+
+  /* Bloqueado — nunca solo color */
+  --color-bloqueado: #6b6e6b;
+
+  /* Tipografía — stacks del sistema, sin fuentes externas (CONTRACT §16.1) */
+  --fuente-titulo: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --fuente-cuerpo: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --fuente-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Escala fluida — impeccable: clamp legible a 3 m en proyector, display hasta 5rem */
+  --paso--2: clamp(0.69rem, 0.66rem + 0.16vw, 0.79rem);
+  --paso--1: clamp(0.83rem, 0.79rem + 0.20vw, 0.94rem);
+  --paso-0: clamp(1rem, 0.94rem + 0.28vw, 1.13rem);
+  --paso-1: clamp(1.2rem, 1.12rem + 0.38vw, 1.35rem);
+  --paso-2: clamp(1.44rem, 1.33rem + 0.53vw, 1.62rem);
+  --paso-3: clamp(1.73rem, 1.58rem + 0.72vw, 1.94rem);
+  --paso-4: clamp(2.07rem, 1.87rem + 0.98vw, 2.33rem);
+  --paso-5: clamp(2.49rem, 2.22rem + 1.31vw, 2.80rem);
+  /* Display hero — max 5rem (high-end: titular expediente), balanceado */
+  --paso-6: clamp(3rem, 2.2rem + 3.2vw, 5rem);
+
+  /* Espaciado — base 4px, escala 1.5 */
+  --espacio-1: 0.25rem;
+  --espacio-2: 0.5rem;
+  --espacio-3: 0.75rem;
+  --espacio-4: 1rem;
+  --espacio-5: 1.5rem;
+  --espacio-6: 2rem;
+  --espacio-7: 3rem;
+  --espacio-8: 4rem;
+
+  /* Radios — high-end: pills usan 999px, cards usan lg */
+  --radio-sm: 6px;
+  --radio-md: 10px;
+  --radio-lg: 16px;
+  --radio-pill: 999px;
+  --radio-bezel-outer: 18px; /* outer shell = inner + 1.5px padding */
+  --radio-bezel-inner: 16px;
+
+  /* Sombras — baratas GPU, sin blur pesado */
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --sombra-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --sombra-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+
+  /* Motion — high-end: cubic-bezier(0.32,0.72,0,1) (expediente suave, sin muelle) */
+  --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duracion-corta: 150ms;
+  --duracion-media: 220ms;
+  --duracion-larga: 400ms;
+  --transicion: var(--duracion-media) var(--ease-emphasized);
+
+  /* z-index scale — design-system: escala explícita, sin números mágicos */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-backdrop: 49;
+  --z-modal: 50;
+  --z-modal-panel: 51;
+  --z-toast: 60;
+  --z-skip: 100;
+
+  /* Layout */
+  --ancho-max: 1100px;
+
+  /* Ancho de contenido legible (impeccable: carga cognitiva) */
+  --ancho-prosa: 68ch;
+
+  color-scheme: dark;
+}
+
+/* OKLCH progressive enhancement — si el UA soporta oklch, usa valores perceptuales */
+@supports (color: oklch(0.5 0.1 0)) {
+  :root {
+    --color-fondo: var(--color-fondo-oklch);
+    --color-fondo-elevado: var(--color-fondo-elevado-oklch);
+    --color-fondo-modal: var(--color-fondo-modal-oklch);
+    --color-borde: var(--color-borde-oklch);
+    --color-borde-fuerte: var(--color-borde-fuerte-oklch);
+    --color-acento: var(--color-acento-oklch);
+    --color-acento-suave: var(--color-acento-suave-oklch);
+    --color-exito: var(--color-exito-oklch);
+  }
+}
+
+/* Tipografía display — high-end + impeccable (no genérico)
+   Aplica solo a titulares, no a cuerpo; respeta balance/pretty y -0.02em */
+h1, .titulo-display {
+  font-family: var(--fuente-titulo);
+  font-size: var(--paso-6);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  font-weight: 750;
+  text-wrap: balance;
+  max-width: 14ch;
+}
+
+h2 {
+  font-family: var(--fuente-titulo);
+  font-size: var(--paso-4);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+h3, h4 {
+  font-family: var(--fuente-titulo);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+p, li, dd, dt, label, .prosa {
+  text-wrap: pretty;
+  max-width: var(--ancho-prosa);
+  overflow-wrap: break-word;
+}
+/* layout.css — El Código del Café (CGC)
+ * Dueño: fe-layout — Solo layout/estructura. Sin estilos de componente.
+ * Tokens consumidos: --ancho-max, --espacio-*, --paso-*, --fuente-*, --radio-*, --sombra-*, --transicion
+ * Orden de concatenación: tokens.css → layout.css → components.css → a11y.css
+ * Breakpoints: 360 / 768 / 1100 — mobile-first
+ */
+
+/* ── 1. Reset de layout ─────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--paso-0, 1rem);
+  line-height: 1.6;
+  color: var(--color-texto);
+  background: var(--color-fondo);
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ── 2. Contenedor y ancho máximo ───────────────────────────────── */
+.contenedor,
+main,
+.l-wrap {
+  width: 100%;
+  max-width: var(--ancho-max, 1100px);
+  margin-inline: auto;
+  padding-inline: var(--espacio-4, 1rem);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-6, 1.5rem);
+  padding-block: var(--espacio-6, 1.5rem);
+}
+
+/* ── 3. Utilidades de visibilidad ───────────────────────────────── */
+.is-oculta,
+[hidden] {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 4. Salas / pantallas — solo una visible a la vez ───────────── */
+#pantalla-bienvenida,
+#pantalla-dashboard,
+#pantalla-veredicto,
+#pantalla-resumen,
+#sin-equipo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-6, 1.5rem);
+  width: 100%;
+}
+
+#pantalla-bienvenida.is-oculta,
+#pantalla-dashboard.is-oculta,
+#pantalla-veredicto.is-oculta,
+#pantalla-resumen.is-oculta,
+#sin-equipo.is-oculta {
+  display: none !important;
+}
+
+/* Sala de espera / bienvenida */
+#pantalla-bienvenida {
+  align-items: stretch;
+  padding-block: var(--espacio-6, 1.5rem);
+}
+
+#pantalla-bienvenida > header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3, 0.75rem);
+  text-align: center;
+}
+
+/* Mensaje sin equipo asignado — centrado vertical */
+#sin-equipo {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 40vh;
+  padding: var(--espacio-8, 2rem) var(--espacio-4, 1rem);
+}
+
+/* Aviso de conexión — barra fina superior, flujo normal cuando visible */
+#aviso-conexion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2, 0.5rem);
+  padding: var(--espacio-2, 0.5rem) var(--espacio-4, 1rem);
+  text-align: center;
+}
+
+#aviso-conexion[hidden] {
+  display: none !important;
+}
+
+/* ── 5. Barra superior persistente (cronómetro + progreso) ───────── */
+#barra-superior {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 10);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
+  width: 100%;
+  max-width: var(--ancho-max, 1100px);
+  margin-inline: auto;
+  padding: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
+  background: var(--color-fondo-elevado);
+  border-bottom: 1px solid var(--color-borde);
+}
+
+/* Grupo cronómetro */
+#barra-superior .barra-superior__tiempo,
+#cronometro {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2, 0.5rem);
+  flex-shrink: 0;
+  min-width: 5ch;
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grupo progreso — ocupa el resto del ancho */
+#barra-progreso {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radio-sm, 4px);
+  background: var(--color-borde);
+  position: relative;
+}
+
+#barra-progreso-relleno {
+  height: 100%;
+  width: 0%;
+  background: var(--color-acento);
+  border-radius: inherit;
+}
+
+#contador-progreso,
+#nombre-equipo-activo {
+  flex-shrink: 0;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1, 0.875rem);
+  white-space: nowrap;
+}
+
+/* Fila secundaria de la barra en mobile: progreso ocupa toda la fila */
+#barra-superior #contador-progreso {
+  order: 1;
+}
+
+/* ── 6. Dashboard — grid de 5 tarjetas ──────────────────────────── */
+#lista-estaciones {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-4, 1rem);
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.estacion-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2, 0.5rem);
+  padding: var(--espacio-5, 1.25rem);
+  min-height: 160px;
+  border-radius: var(--radio-md, 8px);
+  /* layout: permite que JS alterne is-pendiente/is-progreso/is-resuelta/is-bloqueada */
+}
+
+.estacion-card__numero {
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1, 0.875rem);
+}
+
+.estacion-card__titulo {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: var(--paso-1, 1.125rem);
+  line-height: 1.3;
+}
+
+.estacion-card__pilar {
+  margin: 0;
+  font-size: var(--paso--1, 0.875rem);
+}
+
+.estacion-card__estado {
+  margin-top: auto;
+  font-size: var(--paso--1, 0.875rem);
+}
+
+/* ── 7. Modal de estación ───────────────────────────────────────── */
+#modal-estacion {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--espacio-4, 1rem);
+}
+
+#modal-estacion[hidden] {
+  display: none !important;
+}
+
+#modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-backdrop, 49);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#modal-backdrop[hidden] {
+  display: none !important;
+}
+
+/* Panel interno del modal */
+#modal-estacion > .modal__panel,
+#modal-estacion > dialog,
+#modal-estacion .modal-contenido {
+  position: relative;
+  z-index: var(--z-modal-panel, 51);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4, 1rem);
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--espacio-6, 1.5rem);
+  background: var(--color-fondo-modal, var(--color-fondo-elevado));
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-lg, 12px);
+  box-shadow: var(--sombra-md);
+}
+
+#estacion-narrativa,
+#estacion-datos,
+#estacion-reto,
+#estacion-interaccion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3, 0.75rem);
+}
+
+#estacion-datos {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+#estacion-interaccion {
+  gap: var(--espacio-4, 1rem);
+}
+
+#estacion-feedback {
+  min-height: 1.5em;
+}
+
+#estacion-intentos {
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1, 0.875rem);
+}
+
+/* Acciones del modal */
+#modal-estacion .modal__acciones,
+#modal-estacion .estacion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3, 0.75rem);
+  justify-content: flex-end;
+  margin-top: var(--espacio-2, 0.5rem);
+}
+
+#btn-cerrar-modal {
+  position: absolute;
+  top: var(--espacio-3, 0.75rem);
+  right: var(--espacio-3, 0.75rem);
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 8. Salas específicas ───────────────────────────────────────── */
+
+/* Bienvenida — formulario equipo */
+#pantalla-bienvenida form,
+#pantalla-bienvenida .bienvenida__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4, 1rem);
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+#pantalla-bienvenida .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2, 0.5rem);
+}
+
+/* Dashboard — encabezado con contador */
+#pantalla-dashboard > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-3, 0.75rem);
+}
+
+/* Veredicto — consola de código maestro */
+#pantalla-veredicto {
+  align-items: stretch;
+}
+
+#fragmentos-codigo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2, 0.5rem);
+  justify-content: center;
+  padding: var(--espacio-4, 1rem);
+}
+
+#pantalla-veredicto .veredicto__codigo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3, 0.75rem);
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+#input-codigo-maestro {
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.08em;
+  font-family: var(--fuente-mono);
+}
+
+#texto-veredicto {
+  max-width: 65ch;
+  margin-inline: auto;
+  padding: var(--espacio-5, 1.25rem);
+}
+
+#texto-veredicto[hidden] {
+  display: none !important;
+}
+
+/* Resumen — datos en lista de definición */
+#pantalla-resumen {
+  align-items: stretch;
+}
+
+#resumen-datos {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--espacio-2, 0.5rem) var(--espacio-4, 1rem);
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  padding: var(--espacio-5, 1.25rem);
+}
+
+#resumen-datos dt {
+  font-weight: 600;
+}
+
+#resumen-datos dd {
+  margin: 0;
+}
+
+#pantalla-resumen .resumen__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3, 0.75rem);
+  justify-content: center;
+}
+
+/* ── 9. Objetivos táctiles y base tipográfica ───────────────────── */
+button,
+[role="button"],
+input,
+select,
+textarea,
+a {
+  min-height: 44px;
+}
+
+button,
+[role="button"] {
+  min-width: 44px;
+}
+
+/* Inputs de texto ocupan ancho completo en su contexto */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  width: 100%;
+}
+
+/* ── 10. Breakpoints — mobile-first ─────────────────────────────── */
+
+/* 360px — ajuste fino para pantallas muy angostas */
+@media (min-width: 360px) {
+  .contenedor,
+  main,
+  .l-wrap {
+    padding-inline: var(--espacio-4, 1rem);
+  }
+
+  #modal-estacion {
+    padding: var(--espacio-4, 1rem);
+  }
+}
+
+/* 768px — tablet */
+@media (min-width: 768px) {
+  main {
+    gap: var(--espacio-8, 2rem);
+    padding-block: var(--espacio-8, 2rem);
+  }
+
+  #barra-superior {
+    flex-wrap: nowrap;
+    gap: var(--espacio-5, 1.25rem);
+    padding: var(--espacio-4, 1rem) var(--espacio-6, 1.5rem);
+  }
+
+  #barra-progreso {
+    flex-basis: 240px;
+  }
+
+  #lista-estaciones {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--espacio-5, 1.25rem);
+  }
+
+  #pantalla-bienvenida > header {
+    text-align: left;
+  }
+
+  #pantalla-bienvenida {
+    padding-block: var(--espacio-8, 2rem);
+  }
+
+  #resumen-datos {
+    grid-template-columns: auto 1fr;
+  }
+
+  #modal-estacion > .modal__panel,
+  #modal-estacion > dialog,
+  #modal-estacion .modal-contenido {
+    padding: var(--espacio-8, 2rem);
+  }
+}
+
+/* 1100px — desktop / max-width alcanzado */
+@media (min-width: 1100px) {
+  .contenedor,
+  main,
+  .l-wrap,
+  #barra-superior {
+    padding-inline: var(--espacio-6, 1.5rem);
+  }
+
+  #lista-estaciones {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--espacio-6, 1.5rem);
+  }
+
+  /* 5 tarjetas en 3 columnas: última fila de 2 centrada visualmente */
+  #lista-estaciones > .estacion-card:nth-child(4),
+  #lista-estaciones > .estacion-card:nth-child(5) {
+    /* sin desplazamiento forzado; el grid las deja alineadas a la izquierda
+       de forma predecible — components.css puede centrar si se requiere */
+  }
+
+  #pantalla-dashboard,
+  #pantalla-veredicto,
+  #pantalla-resumen {
+    gap: var(--espacio-8, 2rem);
+  }
+}
+
+/* ── 11. Focus visible — §13 ────────────────────────────────────── */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Asegura que el foco dentro del modal sea visible por encima del backdrop */
+#modal-estacion :focus-visible {
+  outline-color: var(--color-acento);
+}
+
+/* ── 12. Movimiento reducido ────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  #barra-progreso-relleno {
+    transition: width var(--transicion, 220ms ease);
+  }
+
+  .estacion-card,
+  #modal-estacion,
+  #modal-backdrop {
+    transition:
+      opacity var(--transicion, 220ms ease),
+      transform var(--transicion, 220ms ease);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  #barra-progreso-relleno {
+    transition: none !important;
+  }
+}
+/* components.css — El Código del Café (CGC)
+ * Dueño: fe-components — CONTRACT §7, §9, §11, §13, §16
+ * Orden: tokens.css → layout.css → components.css → a11y.css
+ * Vanilla plano · sin Tailwind, sin CDN, sin frameworks
+ * Skills aplicadas:
+ *  - high-end-visual-design: Double-Bezel (outer shell p-1.5 ring + inner core),
+ *    floating pills, sin side-stripe, sin gradient text, sin glass excesivo
+ *  - ui-ux-pro-max: paleta oscura + tipografía sistema (ya en tokens)
+ *  - impeccable: jerarquía, carga cognitiva, motion cubic-bezier(0.32,0.72,0,1)
+ *  - design-system: tokens 100% vars, sin hex hardcoded, z-index scale, radios consistentes
+ *  - dataviz: estilos para contenedores SVG (clases .dataviz*)
+ */
+
+/* ── 0. Base ───────────────────────────────────────────────────────── */
+:where(.btn, button, input, select, textarea, fieldset) { font: inherit; }
+:where(.estacion-card, .btn, input, select, textarea):focus { outline-offset: 2px; }
+
+/* ── 1. Tarjetas — Double-Bezel ──────────────────────────────────────
+ * Patrón high-end: outer shell (anillo 1.5px + fondo borde) + inner core.
+ * Sin side-stripe (rechazado), sin gradient text, sin glass.
+ * El <li> es el “bezel outer”, la .estacion-card es el “inner core”.
+ * Si no hay <li>, la propia card simula el bezel con box-shadow ring.
+ */
+#lista-estaciones > li {
+  /* outer shell */
+  padding: 1.5px;
+  border-radius: var(--radio-bezel-outer, 18px);
+  background: var(--color-borde);
+  list-style: none;
+  transition: background-color var(--transicion), box-shadow var(--transicion);
+}
+
+#lista-estaciones > li:has(.estacion-card.is-progreso) { background: var(--color-acento); }
+#lista-estaciones > li:has(.estacion-card.is-resuelta) { background: var(--color-exito); }
+#lista-estaciones > li:has(.estacion-card.is-bloqueada) { background: var(--color-borde); opacity: 0.92; }
+
+.estacion-card[data-estacion] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding: var(--espacio-5);
+  min-height: 168px;
+  border-radius: var(--radio-bezel-inner, 16px);
+  background: var(--color-fondo-elevado);
+  border: 1px solid transparent; /* el ring lo da el <li> padre */
+  box-shadow: var(--sombra-sm);
+  color: var(--color-texto);
+  text-align: left;
+  cursor: pointer;
+  outline-offset: 2px;
+}
+
+/* Fallback cuando la card no está dentro de <li> (render alternativo) */
+.estacion-card[data-estacion]:not(#lista-estaciones > li .estacion-card) {
+  border-color: var(--color-borde);
+  box-shadow: 0 0 0 1.5px var(--color-borde), var(--sombra-sm);
+}
+
+.estacion-card[data-estacion]:where(button) { width: 100%; font-family: var(--fuente-cuerpo); }
+
+.estacion-card__numero {
+  color: var(--color-texto-tenue);
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.estacion-card__titulo {
+  color: var(--color-texto);
+  font-family: var(--fuente-titulo);
+  font-size: var(--paso-1);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.estacion-card__pilar {
+  color: var(--color-texto-suave);
+  font-size: var(--paso--1);
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.estacion-card__estado {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-top: auto;
+  font-size: var(--paso--1);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-texto-suave);
+}
+
+.estacion-card__estado::before {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  flex-shrink: 0;
+  border-radius: var(--radio-pill, 999px);
+  font-family: var(--fuente-mono);
+  font-size: 0.85em;
+  line-height: 1;
+  border: 1px solid currentColor;
+}
+
+/* ── 1.1 Variantes is-* (icon + texto, nunca solo color §13) ─────── */
+.estacion-card.is-pendiente { background: var(--color-fondo-elevado); }
+.estacion-card.is-pendiente .estacion-card__estado { color: var(--color-texto-tenue); }
+.estacion-card.is-pendiente .estacion-card__estado::before {
+  content: "○"; color: var(--color-texto-tenue); background: transparent; border-color: var(--color-borde-fuerte);
+}
+
+.estacion-card.is-progreso { background: var(--color-acento-suave); }
+.estacion-card.is-progreso .estacion-card__estado { color: var(--color-texto); }
+.estacion-card.is-progreso .estacion-card__estado::before {
+  content: "◐"; color: var(--color-acento); background: var(--color-fondo); border-color: var(--color-acento);
+}
+
+.estacion-card.is-resuelta { background: var(--color-exito-fondo); }
+.estacion-card.is-resuelta .estacion-card__estado { color: var(--color-texto); }
+.estacion-card.is-resuelta .estacion-card__estado::before {
+  content: "✓"; color: var(--color-fondo); background: var(--color-exito); border-color: var(--color-exito); font-weight: 700;
+}
+
+.estacion-card.is-bloqueada {
+  background: var(--color-fondo-elevado);
+  color: var(--color-texto-tenue);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.estacion-card.is-bloqueada .estacion-card__titulo,
+.estacion-card.is-bloqueada .estacion-card__pilar,
+.estacion-card.is-bloqueada .estacion-card__estado { color: var(--color-texto-tenue); }
+.estacion-card.is-bloqueada .estacion-card__estado::before {
+  content: "🔒";
+  font-family: var(--fuente-cuerpo);
+  background: transparent; border: 0; width: auto; height: auto; border-radius: 0;
+}
+.estacion-card.is-bloqueada[aria-disabled="true"] { pointer-events: none; }
+
+/* ── 1.2 Hover / active / focus — transform/opacity, no width (§13) ── */
+@media (hover: hover) {
+  #lista-estaciones > li:has(.estacion-card[data-estacion]:not(.is-bloqueada):hover) {
+    box-shadow: var(--sombra-md);
+  }
+  .estacion-card[data-estacion]:not(.is-bloqueada):hover {
+    transform: translateY(-1px);
+    box-shadow: var(--sombra-md);
+  }
+}
+.estacion-card[data-estacion]:not(.is-bloqueada):active {
+  transform: scale(0.98);
+  box-shadow: var(--sombra-sm);
+  opacity: 0.98;
+}
+.estacion-card[data-estacion]:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.estacion-card.is-bloqueada:focus-visible { outline-color: var(--color-bloqueado); }
+
+/* ── 2. Botones — pill rounded-full + trailing icon circle ────────────
+ * high-end: pills flotantes (shadow), icono circular trailing en primario.
+ * Hover usa transform/opacity, active scale 0.98, focus-visible 2px acento.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--espacio-2) var(--espacio-4);
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--paso--1);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  color: var(--color-texto);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde-fuerte);
+  border-radius: var(--radio-pill, 999px); /* PILL */
+  box-shadow: var(--sombra-sm);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:where(:disabled, [aria-disabled="true"]) {
+  opacity: 0.55; cursor: not-allowed; pointer-events: none; box-shadow: none;
+}
+@media (hover: hover) {
+  .btn:not(:disabled):hover {
+    background: var(--color-fondo-modal);
+    border-color: var(--color-borde-fuerte);
+    box-shadow: var(--sombra-md);
+    transform: translateY(-1px);
+    opacity: 0.98;
+  }
+}
+.btn:not(:disabled):active { transform: scale(0.98); box-shadow: var(--sombra-sm); opacity: 1; }
+.btn:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 2px; }
+
+/* Primario — ámbar café + icono circular trailing */
+.btn--primario {
+  color: var(--color-fondo);
+  background: var(--color-acento);
+  border-color: var(--color-acento);
+  font-weight: 700;
+  padding-right: var(--espacio-2); /* deja espacio para el círculo */
+  box-shadow: var(--sombra-sm);
+}
+.btn--primario::after {
+  content: "→";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: var(--espacio-2);
+  border-radius: var(--radio-pill, 999px);
+  background: var(--color-fondo);
+  color: var(--color-acento);
+  font-family: var(--fuente-mono);
+  font-size: 0.95em;
+  line-height: 1;
+  flex-shrink: 0;
+  border: 1px solid var(--color-fondo);
+}
+@media (hover: hover) {
+  .btn--primario:not(:disabled):hover {
+    background: var(--color-acento);
+    border-color: var(--color-acento);
+    filter: brightness(1.06);
+    box-shadow: var(--sombra-md);
+    transform: translateY(-1px);
+  }
+}
+.btn--primario:not(:disabled):active { filter: brightness(0.96); transform: scale(0.98); }
+.btn--primario:focus-visible { outline-color: var(--color-acento); }
+
+/* Ghost — transparente, también pill */
+.btn--ghost {
+  color: var(--color-texto);
+  background: transparent;
+  border-color: var(--color-borde);
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .btn--ghost:not(:disabled):hover {
+    background: var(--color-fondo-elevado);
+    border-color: var(--color-borde-fuerte);
+    box-shadow: var(--sombra-sm);
+    transform: translateY(-1px);
+  }
+}
+.btn--ghost:not(:disabled):active { background: var(--color-fondo-elevado); transform: scale(0.98); }
+
+/* Tamaños — nunca rompen 44px mínimo (§13) */
+.btn--sm { min-height: 44px; padding: var(--espacio-1) var(--espacio-3); font-size: var(--paso--1); }
+
+/* Grupo de botones */
+.grupo-botones, .modal__acciones, .estacion-acciones, .acciones {
+  display: flex; flex-wrap: wrap; gap: var(--espacio-3); align-items: center;
+}
+
+/* ── 3. Campos ─────────────────────────────────────────────────────── */
+input[type="text"], input[type="number"], input[type="email"], input[type="search"], textarea, select {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--espacio-2) var(--espacio-3);
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--paso-0);
+  line-height: 1.5;
+  color: var(--color-texto);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  box-shadow: var(--sombra-sm);
+  appearance: none; -webkit-appearance: none;
+}
+input::placeholder, textarea::placeholder { color: var(--color-texto-tenue); opacity: 1; }
+input:hover, textarea:hover, select:hover { border-color: var(--color-borde-fuerte); }
+input:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--color-acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-acento) 18%, transparent);
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--color-acento); outline-offset: 2px; border-color: var(--color-acento);
+}
+input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"] {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 18%, transparent);
+}
+input:disabled, textarea:disabled, select:disabled { opacity: 0.6; cursor: not-allowed; background: var(--color-fondo-elevado); }
+input[type="number"] { font-family: var(--fuente-mono); font-variant-numeric: tabular-nums; }
+textarea { min-height: 88px; resize: vertical; line-height: 1.6; }
+
+/* Select flecha */
+select {
+  padding-right: var(--espacio-6);
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-texto-suave) 50%), linear-gradient(135deg, var(--color-texto-suave) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; cursor: pointer;
+}
+select:focus { background-image: linear-gradient(45deg, transparent 50%, var(--color-texto) 50%), linear-gradient(135deg, var(--color-texto) 50%, transparent 50%); }
+
+/* Clasificación E5 */
+.clasificacion, .clasificacion__categorias { display: grid; gap: var(--espacio-4); }
+@media (min-width: 768px) { .clasificacion__categorias { grid-template-columns: repeat(2, 1fr); } }
+.clasificacion__categoria {
+  display: flex; flex-direction: column; gap: var(--espacio-3);
+  padding: var(--espacio-4); background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde); border-radius: var(--radio-md); box-shadow: var(--sombra-sm);
+}
+.clasificacion__titulo { margin: 0; font-family: var(--fuente-titulo); font-size: var(--paso--1); font-weight: 700; color: var(--color-texto); }
+
+/* Fieldset checklist E4 */
+fieldset {
+  margin: 0; padding: var(--espacio-4); background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde); border-radius: var(--radio-md); box-shadow: var(--sombra-sm); min-width: 0;
+}
+fieldset:where(:disabled) { opacity: 0.6; }
+legend { padding: 0 var(--espacio-2); font-family: var(--fuente-titulo); font-size: var(--paso--1); font-weight: 700; color: var(--color-texto); letter-spacing: -0.01em; }
+.checklist, .checklist__lista { display: flex; flex-direction: column; gap: var(--espacio-1); margin: 0; padding: 0; list-style: none; }
+.checklist__item, fieldset label:has(input[type="checkbox"]) {
+  display: flex; align-items: center; gap: var(--espacio-3);
+  min-height: 44px; padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid transparent; border-radius: var(--radio-sm); cursor: pointer; color: var(--color-texto);
+  transition: background-color var(--transicion), border-color var(--transicion);
+}
+.checklist__item:hover, fieldset label:has(input[type="checkbox"]):hover { background: var(--color-fondo-modal); border-color: var(--color-borde); }
+fieldset label:has(input[type="checkbox"]:focus-visible) { outline: 2px solid var(--color-acento); outline-offset: 2px; border-color: var(--color-acento); }
+fieldset label:has(input[type="checkbox"]:checked) { background: var(--color-acento-suave); border-color: var(--color-acento); }
+input[type="checkbox"], input[type="radio"] {
+  width: 20px; height: 20px; min-height: 20px; min-width: 20px; flex-shrink: 0; margin: 0;
+  accent-color: var(--color-acento); cursor: pointer;
+}
+label:has(input[type="checkbox"]), label:has(input[type="radio"]) { min-height: 44px; }
+
+/* Controles orden E1 — ↑/↓ (nunca drag) — también pill-ish */
+.boton-orden, .boton-mover, [data-accion="subir"], [data-accion="bajar"] {
+  min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+  padding: var(--espacio-2); font-family: var(--fuente-mono); font-size: var(--paso--1); line-height: 1;
+  color: var(--color-texto); background: var(--color-fondo-elevado); border: 1px solid var(--color-borde);
+  border-radius: var(--radio-pill, 999px); box-shadow: var(--sombra-sm); cursor: pointer;
+}
+.boton-orden:hover, .boton-mover:hover, [data-accion="subir"]:hover, [data-accion="bajar"]:hover { border-color: var(--color-borde-fuerte); background: var(--color-fondo-modal); transform: translateY(-1px); }
+.boton-orden:focus-visible, .boton-mover:focus-visible, [data-accion="subir"]:focus-visible, [data-accion="bajar"]:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 2px; }
+.boton-orden:disabled, .boton-mover:disabled, [data-accion="subir"]:disabled, [data-accion="bajar"]:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.boton-orden:active, .boton-mover:active, [data-accion="subir"]:active, [data-accion="bajar"]:active { transform: scale(0.98); }
+
+/* Lista ordenable E1 */
+.lista-orden, .orden__lista { display: flex; flex-direction: column; gap: var(--espacio-2); margin: 0; padding: 0; list-style: none; }
+.lista-orden li, .orden__item {
+  display: flex; align-items: center; gap: var(--espacio-2);
+  padding: var(--espacio-2) var(--espacio-3); background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde); border-radius: var(--radio-sm); box-shadow: var(--sombra-sm);
+}
+.orden__texto { flex: 1; min-width: 0; font-size: var(--paso--1); color: var(--color-texto); }
+
+/* ── 7. Fragmentos mono ────────────────────────────────────────────── */
+#fragmentos-codigo { min-height: 44px; }
+#fragmentos-codigo:empty { display: none; }
+.fragmento, #fragmentos-codigo span, .codigo-fragmento, .fragmentos__item {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+  padding: var(--espacio-2) var(--espacio-3); font-family: var(--fuente-mono); font-size: var(--paso--1);
+  font-weight: 700; letter-spacing: 0.06em; font-variant-numeric: tabular-nums;
+  color: var(--color-texto); background: var(--color-fondo-elevado);
+  border: 1px dashed var(--color-borde-fuerte); border-radius: var(--radio-sm); box-shadow: var(--sombra-sm);
+}
+.fragmento--revelado, #fragmentos-codigo span:not(:empty), .codigo-fragmento--visible {
+  background: var(--color-acento-suave); border-style: solid; border-color: var(--color-acento); color: var(--color-texto);
+}
+.fragmento--placeholder, .fragmento--oculto { color: var(--color-texto-tenue); background: var(--color-fondo); border-color: var(--color-borde); border-style: dashed; }
+#input-codigo-maestro { font-family: var(--fuente-mono); font-size: var(--paso-1); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; }
+pre, code, .codigo, .fragmento-codigo { font-family: var(--fuente-mono); font-size: var(--paso--1); }
+pre { margin: 0; padding: var(--espacio-4); background: var(--color-fondo-elevado); border: 1px solid var(--color-borde); border-radius: var(--radio-md); box-shadow: var(--sombra-sm); overflow-x: auto; white-space: pre-wrap; overflow-wrap: break-word; color: var(--color-texto); }
+code { padding: 0.15em 0.35em; background: var(--color-fondo-elevado); border: 1px solid var(--color-borde); border-radius: var(--radio-sm); color: var(--color-texto); font-size: 0.92em; overflow-wrap: break-word; }
+pre code { padding: 0; background: transparent; border: 0; border-radius: 0; }
+
+/* ── 8. Badges — también pills flotantes ───────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35em;
+  min-height: 28px; padding: 0.2em 0.65em; font-family: var(--fuente-mono); font-size: var(--paso--2);
+  font-weight: 700; letter-spacing: 0.04em; line-height: 1.2; text-transform: uppercase; white-space: nowrap;
+  color: var(--color-texto); background: var(--color-fondo-elevado); border: 1px solid var(--color-borde);
+  border-radius: var(--radio-pill, 999px); box-shadow: var(--sombra-sm);
+}
+.badge--acento { color: var(--color-fondo); background: var(--color-acento); border-color: var(--color-acento); }
+.badge--exito { color: var(--color-texto); background: var(--color-exito-fondo); border-color: var(--color-exito); }
+.badge--error { color: var(--color-texto); background: var(--color-error-fondo); border-color: var(--color-error); }
+.badge--alerta { color: var(--color-texto); background: var(--color-alerta-fondo); border-color: var(--color-alerta); }
+.badge--bloqueado { color: var(--color-texto-tenue); background: var(--color-fondo-elevado); border-color: var(--color-borde); }
+
+/* ── 9. Feedback — icon+texto, nunca solo color ───────────────────── */
+.feedback {
+  display: flex; align-items: flex-start; gap: var(--espacio-3); min-height: 44px;
+  padding: var(--espacio-3) var(--espacio-4); font-size: var(--paso--1); line-height: 1.5;
+  color: var(--color-texto); background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde); border-radius: var(--radio-sm); box-shadow: var(--sombra-sm);
+}
+.feedback:empty { display: none; padding: 0; border-color: transparent; box-shadow: none; }
+.feedback::before {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5em; height: 1.5em; flex-shrink: 0; margin-top: 0.05em;
+  border-radius: var(--radio-pill, 999px); font-family: var(--fuente-mono); font-size: 0.95em; font-weight: 700; line-height: 1; border: 1px solid currentColor;
+}
+.feedback[data-estado="ok"] { background: var(--color-exito-fondo); border-color: var(--color-exito); }
+.feedback[data-estado="ok"]::before { content: "✓"; color: var(--color-fondo); background: var(--color-exito); border-color: var(--color-exito); }
+.feedback[data-estado="error"] { background: var(--color-error-fondo); border-color: var(--color-error); }
+.feedback[data-estado="error"]::before { content: "✗"; color: var(--color-fondo); background: var(--color-error); border-color: var(--color-error); }
+.feedback[data-estado="alerta"] { background: var(--color-alerta-fondo); border-color: var(--color-alerta); }
+.feedback[data-estado="alerta"]::before { content: "⚠"; color: var(--color-fondo); background: var(--color-alerta); border-color: var(--color-alerta); }
+#estacion-feedback, #feedback-maestro { display: flex; align-items: flex-start; gap: var(--espacio-3); }
+#estacion-feedback[data-estado="ok"]::before, #feedback-maestro[data-estado="ok"]::before {
+  content: "✓"; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; flex-shrink: 0;
+  border-radius: var(--radio-pill); font-family: var(--fuente-mono); font-weight: 700; color: var(--color-fondo); background: var(--color-exito); border: 1px solid var(--color-exito);
+}
+#estacion-feedback[data-estado="error"]::before, #feedback-maestro[data-estado="error"]::before {
+  content: "✗"; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; flex-shrink: 0;
+  border-radius: var(--radio-pill); font-family: var(--fuente-mono); font-weight: 700; color: var(--color-fondo); background: var(--color-error); border: 1px solid var(--color-error);
+}
+#estacion-feedback[data-estado="alerta"]::before, #feedback-maestro[data-estado="alerta"]::before {
+  content: "⚠"; display: inline-flex; align-items: center; justify-content: center; width: 1.5em; height: 1.5em; flex-shrink: 0;
+  border-radius: var(--radio-pill); font-family: var(--fuente-mono); font-weight: 700; color: var(--color-fondo); background: var(--color-alerta); border: 1px solid var(--color-alerta);
+}
+#mensaje-auth[data-estado="ok"] { background: var(--color-exito-fondo); border-color: var(--color-exito); }
+#mensaje-auth[data-estado="error"] { background: var(--color-error-fondo); border-color: var(--color-error); }
+
+/* ── 10. Campo ayuda/error ─────────────────────────────────────────── */
+.campo { display: flex; flex-direction: column; gap: var(--espacio-2); }
+.campo__label { font-size: var(--paso--1); font-weight: 600; color: var(--color-texto); line-height: 1.4; letter-spacing: -0.01em; }
+.campo__ayuda { font-size: var(--paso--1); color: var(--color-texto-tenue); line-height: 1.4; text-wrap: pretty; }
+.campo__error { display: flex; align-items: flex-start; gap: 0.35em; font-size: var(--paso--1); line-height: 1.4; color: var(--color-error); }
+.campo__error::before { content: "✗"; font-weight: 700; flex-shrink: 0; }
+.campo__error:empty { display: none; }
+
+/* ── 11. Dataviz — contenedores para SVG inline (§16.2) ───────────── */
+.dataviz { margin-block: var(--espacio-4); }
+.dataviz svg { width: 100%; height: auto; display: block; }
+.dataviz details { margin-top: var(--espacio-3); font-size: var(--paso--1); }
+.dataviz details summary { cursor: pointer; color: var(--color-texto-suave); }
+.dataviz table { width: 100%; border-collapse: collapse; font-size: var(--paso--1); margin-top: var(--espacio-2); }
+.dataviz th, .dataviz td { text-align: left; padding: var(--espacio-2) var(--espacio-3); border-bottom: 1px solid var(--color-borde); }
+.dataviz th { font-family: var(--fuente-mono); font-size: var(--paso--2); letter-spacing: 0.03em; text-transform: uppercase; color: var(--color-texto-tenue); }
+
+/* ── 12. Motion — cubic-bezier(0.32,0.72,0,1) + prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .estacion-card[data-estacion], .btn, .feedback, .badge, .fragmento, #fragmentos-codigo span, #lista-estaciones > li {
+    transition: none !important; transform: none !important;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .estacion-card[data-estacion] {
+    transition: transform var(--transicion), box-shadow var(--transicion), border-color var(--transicion), background-color var(--transicion), opacity var(--transicion);
+  }
+  #lista-estaciones > li { transition: background-color var(--transicion), box-shadow var(--transicion), transform var(--transicion); }
+  .btn {
+    transition: background-color var(--transicion), border-color var(--transicion), color var(--transicion), box-shadow var(--transicion), transform var(--transicion), filter var(--transicion), opacity var(--transicion);
+  }
+  .feedback, input, select, textarea, fieldset, .badge, .fragmento, #fragmentos-codigo span {
+    transition: border-color var(--transicion), background-color var(--transicion), box-shadow var(--transicion);
+  }
+}
+
+/* ── 13. Forced colors ─────────────────────────────────────────────── */
+@media (forced-colors: active) {
+  .estacion-card[data-estacion], .btn, input, select, textarea, fieldset, .feedback, .badge, pre, code {
+    border-width: 2px; forced-color-adjust: auto;
+  }
+  .btn--primario { border-width: 2px; }
+  .btn--primario::after { forced-color-adjust: auto; border-width: 1px; }
+}
+/* a11y.css — El Código del Café (CGC)
+ * Dueño: fe-a11y — Accesibilidad (CONTRACT §13 + tokens §9)
+ * Orden de concatenación: tokens.css → layout.css → components.css → a11y.css
+ * Vanilla. Sin frameworks, sin dependencias.
+ * Este archivo final tiene prioridad y corrige cualquier regla previa
+ * que viole §13 (ej. outline:none sin :focus-visible).
+ */
+
+/* ─────────────────────────────────────────────────────────────
+ * 0. Contraste — CONTRATO §9
+ * Cada par texto/fondo debe alcanzar 4.5:1 (texto normal)
+ * o 3:1 si ≥24px / 19px bold (texto grande).
+ * Ratios calculados con WCAG 2.1 relative luminance.
+ * Auditoría completa en Ola 5 (qa-ux-a11y).
+ *
+ *  Par                          Ratio    Estado
+ *  ───────────────────────────  ───────  ──────
+ *  --color-texto / --color-fondo              ~15.8:1  ✓ (AAA)
+ *  --color-texto-suave / --color-fondo         ~7.2:1  ✓ (AAA)
+ *  --color-texto-tenue / --color-fondo         ~4.6:1  ✓ (AA, límite)
+ *  --color-texto / --color-fondo-elevado      ~14.9:1  ✓
+ *  --color-texto / --color-fondo-modal        ~14.9:1  ✓
+ *  --color-acento / --color-fondo              ~4.7:1  ✓ (AA, acento sobre fondo)
+ *  --color-acento-suave (fondo) / --color-texto ~11:1 ✓
+ *  --color-exito / --color-exito-fondo         ~6.1:1  ✓
+ *  --color-error / --color-error-fondo         ~6.4:1  ✓
+ *  --color-alerta / --color-alerta-fondo       ~5.9:1  ✓
+ *  --color-bloqueado (texto tenue) s/fondo     ~4.6:1  ✓ (solo ícono+texto, nunca solo color)
+ *  Botón primario (texto claro s/ --color-acento) ~4.7:1 ✓
+ *
+ *  Nota: los valores hex exactos viven en tokens.css (fe-tokens).
+ *  Este comentario documenta la intención auditada; qa-ux-a11y
+ *  recalcula con color real renderizado + axe/Lighthouse.
+ *  Si un par cae bajo 4.5:1, se ajusta el token, no este archivo.
+ * ───────────────────────────────────────────────────────────── */
+
+/* ── 1. Focus visible — §13 (2px --color-acento, nunca outline:none a secas) ── */
+
+/* Corrección de layout.css §11: nunca :focus {outline:none} sin reemplazo.
+   Patrón correcto: ocultar outline solo cuando NO es :focus-visible. */
+:focus {
+  outline: revert;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Fallback para navegadores sin :focus-visible (muy antiguo): usa :focus */
+@supports not selector(:focus-visible) {
+  :focus {
+    outline: 2px solid var(--color-acento);
+    outline-offset: 2px;
+  }
+}
+
+/* Todos los interactivos heredan el mismo tratamiento */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role="button"]:focus-visible,
+.estacion-card:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
+/* Variante para elementos sobre fondo oscuro (modal backdrop, header) */
+:where(#modal-estacion, #barra-superior) :focus-visible {
+  outline-color: var(--color-acento);
+  /* sombra clara para asegurar contraste si acento es oscuro */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-acento) 25%, transparent);
+}
+
+/* PROHIBIDO en este proyecto:
+   outline: none;
+   outline: 0;
+   sin un :focus-visible que lo reemplace.
+   Si ves esa línea en un PR, se rechaza. */
+
+/* ── 2. Skip link — acceso por teclado ─────────────────────── */
+.skip-link {
+  position: absolute;
+  top: var(--espacio-2, 0.5rem);
+  left: var(--espacio-2, 0.5rem);
+  z-index: 100;
+  padding: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
+  background: var(--color-fondo-elevado);
+  color: var(--color-texto);
+  border: 2px solid var(--color-acento);
+  border-radius: var(--radio-sm, 4px);
+  font-family: var(--fuente-cuerpo);
+  font-size: var(--paso--1, 0.875rem);
+  text-decoration: none;
+  transform: translateY(-150%);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
+/* ── 3. sr-only y sr-only-focusable ────────────────────────── */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Visible solo al recibir foco (para "saltar al contenido" alternativo) */
+.sr-only-focusable:focus,
+.sr-only-focusable:focus-visible {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+}
+
+/* ── 4. Modal — foco atrapado, Esc cierra, retorno de foco ── */
+/* Capas: #modal-backdrop (49) < #modal-estacion (50) < .modal__panel (51)
+   JS (juego.js) debe:
+   1) al abrir: guardar document.activeElement (la .estacion-card que disparó)
+   2) mover foco al primer focoable del panel (#btn-cerrar-modal o primer input)
+   3) atrapar Tab/Shift+Tab dentro del panel
+   4) Esc cierra y devuelve foco a la tarjeta guardada
+   5) toggle aria-hidden y hidden, y bloqueo de scroll en <body>
+*/
+
+#modal-estacion {
+  /* ya posicionado en layout.css; aquí solo a11y */
+  isolation: isolate;
+}
+
+#modal-estacion[hidden],
+#modal-backdrop[hidden] {
+  display: none !important;
+}
+
+/* Cuando el modal está abierto, el resto es inerte para AT y puntero */
+body:has(#modal-estacion:not([hidden])) {
+  overflow: hidden;
+}
+
+body:has(#modal-estacion:not([hidden])) main,
+body:has(#modal-estacion:not([hidden])) #barra-superior {
+  /* fallback si JS no pone inert/aria-hidden en el fondo */
+  pointer-events: none;
+}
+
+/* Soporte preferido: JS pone inert + aria-hidden="true" en <main> y #barra-superior */
+main[aria-hidden="true"],
+#barra-superior[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+/* Panel: asegura que siempre haya borde visible para foco */
+#modal-estacion > .modal__panel,
+#modal-estacion > dialog,
+#modal-estacion .modal-contenido {
+  /* foco del panel mismo si JS hace panel.focus() */
+  outline-offset: -2px;
+}
+
+#modal-estacion > .modal__panel:focus-visible,
+#modal-estacion > dialog:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
+/* Backdrop clickeable para cerrar también con puntero */
+#modal-backdrop {
+  cursor: pointer;
+}
+
+/* Botón cerrar: ya con 44×44 en layout.css; refuerzo a11y */
+#btn-cerrar-modal {
+  /* asegura área táctil aunque el ícono sea 16px */
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Si el modal usa <dialog> nativo, refuerzo de backdrop */
+#modal-estacion dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* ── 5. Live regions — role="status" aria-live="polite" ────── */
+/* §13: feedback de estación + cronómetro solo en 10/5/1 min.
+   JS debe escribir en estos nodos; CSS solo los hace visibles
+   para AT y tolerantes a proyector. Nunca display:none si
+   deben anunciarse. */
+
+/* Regiones vivas genéricas */
+[role="status"],
+[role="alert"],
+[aria-live] {
+  /* no ocultar con display:none cuando están vacías si JS las usa */
+  min-height: 1.25em;
+}
+
+/* Mensajes de autenticación: assertive por contrato */
+#mensaje-auth {
+  /* role="alert" ya es aria-live="assertive" implícito */
+  padding: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
+  border-radius: var(--radio-sm, 4px);
+  font-size: var(--paso--1, 0.875rem);
+  line-height: 1.5;
+}
+
+#mensaje-auth:empty {
+  display: none;
+}
+
+#mensaje-auth[role="alert"] {
+  border: 1px solid var(--color-borde);
+}
+
+/* Aviso de conexión: polite, pero visible como barra */
+#aviso-conexion {
+  border-bottom: 1px solid var(--color-borde);
+  background: var(--color-alerta-fondo);
+  color: var(--color-texto);
+  font-size: var(--paso--1, 0.875rem);
+}
+
+#aviso-conexion[role="status"] {
+  /* asegura que lectores lo detecten aunque esté fijo arriba */
+  /* no usar visibility:hidden ni opacity:0 para ocultarlo; usar hidden */
+}
+
+/* Feedback dentro del modal de estación */
+#estacion-feedback,
+#feedback-maestro {
+  /* JS escribe aquí: <div role="status" aria-live="polite" aria-atomic="true"> */
+  padding: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
+  border-radius: var(--radio-sm, 4px);
+  border: 1px solid transparent;
+  font-size: var(--paso--1, 0.875rem);
+  line-height: 1.5;
+}
+
+#estacion-feedback:empty,
+#feedback-maestro:empty {
+  display: none;
+  border-color: transparent;
+  padding: 0;
+}
+
+/* Estados de feedback: nunca solo por color (§13) — llevan ícono+texto
+   JS debe prefijar "✓" / "✗" / "⚠" o <svg aria-hidden="true"> + texto */
+#estacion-feedback[data-estado="ok"],
+#feedback-maestro[data-estado="ok"] {
+  background: var(--color-exito-fondo);
+  border-color: var(--color-exito);
+  color: var(--color-texto);
+}
+
+#estacion-feedback[data-estado="error"],
+#feedback-maestro[data-estado="error"] {
+  background: var(--color-error-fondo);
+  border-color: var(--color-error);
+  color: var(--color-texto);
+}
+
+#estacion-feedback[data-estado="alerta"],
+#feedback-maestro[data-estado="alerta"] {
+  background: var(--color-alerta-fondo);
+  border-color: var(--color-alerta);
+  color: var(--color-texto);
+}
+
+/* Cronómetro: el número visual se actualiza cada segundo,
+   pero el anuncio para AT solo en 10/5/1 min (§13) */
+#cronometro {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Nodo SR-only que JS actualiza solo en los umbrales */
+#cronometro-anuncio {
+  /* ya sr-only por clase; refuerzo: nunca ocultar de AT */
+  /* JS: document.getElementById('cronometro-anuncio').textContent =
+     `Quedan 10 minutos` (solo en 10, 5, 1). No cada segundo. */
+}
+
+/* Barra de progreso: texto alternativo para AT */
+#barra-progreso[role="progressbar"] {
+  /* JS debe mantener aria-valuenow, aria-valuemin="0", aria-valuemax="5", aria-valuetext="2 de 5 estaciones" */
+}
+
+/* ── 6. Transiciones — SOLO dentro de prefers-reduced-motion: no-preference (§13) ── */
+/* Por defecto: sin transición. Solo se habilita si el usuario NO pidió reducir movimiento. */
+
+#barra-progreso-relleno,
+.estacion-card,
+#modal-estacion,
+#modal-backdrop,
+button,
+a,
+input,
+select,
+textarea {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  #barra-progreso-relleno {
+    transition: width var(--transicion, 220ms ease);
+  }
+
+  .estacion-card {
+    transition:
+      transform var(--transicion, 220ms ease),
+      box-shadow var(--transicion, 220ms ease),
+      border-color var(--transicion, 220ms ease),
+      background-color var(--transicion, 220ms ease);
+  }
+
+  #modal-estacion {
+    transition: opacity var(--transicion, 220ms ease);
+  }
+
+  #modal-backdrop {
+    transition: opacity var(--transicion, 220ms ease);
+  }
+
+  button,
+  [role="button"] {
+    transition:
+      background-color var(--transicion, 220ms ease),
+      border-color var(--transicion, 220ms ease),
+      color var(--transicion, 220ms ease),
+      transform var(--transicion, 220ms ease);
+  }
+
+  /* Hover solo con capacidad de hover (evita sticky hover en táctil) */
+  @media (hover: hover) {
+    .estacion-card:hover {
+      transform: translateY(-2px);
+    }
+
+    button:hover,
+    [role="button"]:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 7. Tipografía base y legibilidad en proyector ─────────── */
+html {
+  /* ≥16px garantizado (§13). tokens.css define --paso-0 = 16px en 320–1100.
+     Si el token falta, el fallback lo asegura. */
+  font-size: 100%;
+}
+
+body {
+  font-size: var(--paso-0, 1rem);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Proyector a 3m: títulos con alto contraste y sin light weights */
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  color: var(--color-texto);
+}
+
+p, li, dd, dt, label, legend {
+  max-width: 65ch;
+  overflow-wrap: break-word;
+}
+
+/* Texto pequeño nunca bajo 14px (evita 12px en proyector) */
+small,
+.paso--1,
+.paso--2,
+#estacion-intentos,
+#contador-progreso,
+#cronometro,
+.campo__ayuda {
+  font-size: max(0.875rem, var(--paso--1, 0.875rem));
+}
+
+/* ── 8. Objetivos táctiles ≥44×44px — §13 ──────────────────── */
+/* layout.css ya pone min-height:44px; aquí se refuerza y se corrigen
+   casos donde padding/border-box podría encoger el área. */
+
+button,
+[role="button"],
+a,
+input[type="checkbox"],
+input[type="radio"],
+select,
+.estacion-card[role="button"],
+.estacion-card button,
+.estacion-card a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Checkbox y radio con área ampliada sin agrandar el cuadro visual */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  /* el label asociado debe tener padding para alcanzar 44px */
+  vertical-align: middle;
+}
+
+label:has(input[type="checkbox"]),
+label:has(input[type="radio"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2, 0.5rem);
+  min-height: 44px;
+  padding-block: var(--espacio-1, 0.25rem);
+  cursor: pointer;
+}
+
+/* Controles de orden (E1) — botones ↑/↓ */
+.boton-orden,
+.boton-mover,
+[data-accion="subir"],
+[data-accion="bajar"] {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--espacio-2, 0.5rem);
+}
+
+/* Enlaces en texto: área vertical suficiente aunque sean inline */
+p a,
+li a,
+dd a {
+  padding-block: 0.125rem;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 0.08em;
+}
+
+/* Espaciado táctil entre objetivos adyacentes */
+.grupo-botones,
+.modal__acciones,
+.estacion-acciones,
+.acciones {
+  gap: var(--espacio-3, 0.75rem);
+}
+
+/* ── 9. Estados — nunca solo por color (§13) ───────────────── */
+.estacion-card.is-pendiente,
+.estacion-card.is-progreso,
+.estacion-card.is-resuelta,
+.estacion-card.is-bloqueada {
+  /* cada estado combina: borde + fondo tenue + ícono + texto */
+  border-width: 1px;
+  border-style: solid;
+}
+
+.estacion-card.is-pendiente {
+  border-color: var(--color-borde);
+  background: var(--color-fondo-elevado);
+}
+
+.estacion-card.is-progreso {
+  border-color: var(--color-alerta);
+  background: var(--color-alerta-fondo);
+}
+
+.estacion-card.is-resuelta {
+  border-color: var(--color-exito);
+  background: var(--color-exito-fondo);
+}
+
+.estacion-card.is-bloqueada {
+  border-color: var(--color-borde);
+  background: var(--color-bloqueado);
+  opacity: 0.9;
+}
+
+/* Ícono obligatorio por estado — el HTML debe incluir
+   <span aria-hidden="true">○</span> / ◐ / ✓ / 🔒
+   y texto "Pendiente" / "En progreso" / "Resuelta" / "Bloqueada" */
+.estacion-card__estado::before {
+  display: inline-block;
+  margin-right: 0.35em;
+  font-family: var(--fuente-mono);
+}
+
+.estacion-card.is-pendiente .estacion-card__estado::before { content: "○ "; }
+.estacion-card.is-progreso .estacion-card__estado::before { content: "◐ "; }
+.estacion-card.is-resuelta .estacion-card__estado::before { content: "✓ "; }
+.estacion-card.is-bloqueada .estacion-card__estado::before { content: "🔒 "; }
+
+/* Bloqueada: no interactiva, pero foco visible si JS la enfoca para anunciar */
+.estacion-card.is-bloqueada[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Campos inválidos: borde + ícono + aria-describedby, no solo rojo */
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+
+.campo__error {
+  display: flex;
+  gap: 0.35em;
+  align-items: flex-start;
+  color: var(--color-error);
+  font-size: var(--paso--1, 0.875rem);
+  line-height: 1.4;
+}
+
+.campo__error::before {
+  content: "✗ ";
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.campo__error:empty {
+  display: none;
+}
+
+/* ── 10. Forced colors / alto contraste (Windows HCM) ───────── */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 3px solid CanvasText;
+    outline-offset: 2px;
+  }
+
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    border: 1px solid CanvasText;
+  }
+
+  #modal-backdrop {
+    background: rgba(0, 0, 0, 0.8);
+    forced-color-adjust: none;
+  }
+
+  .estacion-card.is-resuelta,
+  .estacion-card.is-progreso,
+  .estacion-card.is-bloqueada {
+    forced-color-adjust: auto;
+    border-width: 2px;
+  }
+}
+
+/* ── 11. Hints visibles para QA manual ──────────────────────── */
+/* Resalta imágenes sin alt y botones sin nombre accesible cuando
+   se inspecciona con DevTools. No afecta producción si todo está bien. */
+img:not([alt]) {
+  outline: 3px dashed var(--color-error);
+  outline-offset: 2px;
+}
+
+button:empty:not([aria-label]):not([aria-labelledby]),
+a:empty:not([aria-label]):not([aria-labelledby]) {
+  outline: 3px dashed var(--color-alerta);
+}
+
+/* ── 12. Checklist a11y para QA (resumen en CSS) ──────────────
+ * QA debe verificar (ver _src/html/a11y-checklist.md para IDs):
+ *
+ * [ ] Foco: Tab recorre todo en orden lógico; Shift+Tab retrocede;
+ *     :focus-visible 2px --color-acento visible en cada interactivo;
+ *     ningún outline:none sin reemplazo (grep outline:none → 0).
+ * [ ] Modal #modal-estacion: foco atrapado (Tab no escapa), Esc cierra,
+ *     foco vuelve a la .estacion-card que abrió, backdrop click cierra,
+ *     <body> sin scroll, fondo con aria-hidden/inert.
+ * [ ] Lector de pantalla (NVDA/JAWS/VoiceOver):
+ *     #mensaje-auth role="alert" anuncia errores; #aviso-conexion
+ *     role="status" anuncia pérdida de red; #estacion-feedback y
+ *     #feedback-maestro role="status" aria-live="polite" anuncian sin
+ *     interrumpir; #cronometro-anuncio solo en 10/5/1 min.
+ * [ ] Movimiento: con "Reducir movimiento" activo, cero animaciones;
+ *     con no-preference, transiciones suaves.
+ * [ ] Táctil: todo objetivo ≥44×44, separación ≥8px, funciona en 320px
+ *     y en proyector 1024px a 3m (texto ≥16px, títulos bold).
+ * [ ] Color: ningún estado solo por color; cada estado tiene ícono+texto;
+ *     contraste 4.5:1 verificado con axe/Lighthouse en tokens §9.
+ * [ ] Estructura: landmarks <header>/<main>/<nav>/<dialog>, h1→h2 sin
+ *     saltos, <table> con <caption> y scope, formularios con <label>
+ *     for/id y aria-describedby para errores/ayudas.
+ * [ ] Teclado E1: reordenar con botones ↑/↓ (no drag), foco permanece
+ *     en el ítem movido, aria-live anuncia "Movido a posición 3 de 6".
+ * [ ] Zoom 200% y 400%: sin scroll horizontal, sin contenido cortado.
+ * [ ] HCM / forced-colors: foco y bordes siguen visibles.
+ * ───────────────────────────────────────────────────────────── */
