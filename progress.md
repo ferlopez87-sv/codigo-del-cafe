@@ -180,3 +180,33 @@ Frontend: `_src/css/tokens.css:1` (36 vars, contrastes 4.5:1), `layout.css` (590
 Integración Ola 4: `styles.css` concatenado, 3 HTML copiados, 4 JS copiados, `node --check` OK en 7 archivos, `grep -ri service_role` 0, `grep -rn innerHTML` 0 en `js/`, IDs smoke: `#reg-correo`/`#cod-token`/`#sin-equipo`/`#aviso-conexion`/`#cronometro`/`#lista-estaciones` etc. `cc-pg` validó `estaciones` 5 filas, `docentes_autorizados` 1 fila (`fglopez@monicaherrera.edu.sv`), `perfiles` docente+estudiantes, `styles.css` 2376L.
 
 QA Ola 5 (no bloqueante, ya entregado): `_src/qa/qa-seguridad.md` (9 pruebas negativas), `qa-funcional.md` (OTP, equipos, estaciones, cronómetro), `qa-pedagogico.md` (APTO, 3 MEDIOS: E1-01 código, E5-01 pista 3, G-01 buffer), `qa-a11y.md` (38 casos WCAG, 7 issues). Pendiente cierre dinámico con `axe-core` + Lighthouse + SR.
+
+---
+
+## 2026-08-25 — Ola 1 interrumpida por límite de sesión; documentos sincronizados
+
+Los tres subagentes de base de datos se cortaron por límite de sesión de la API (reinicia 20:50). **Las correcciones del harness alcanzaron a aplicarse antes del corte.** Verificado por inspección directa de los archivos:
+
+| Corrección | Estado |
+|---|---|
+| `docentes_autorizados` creada y protegida | aplicada (01 y 02) |
+| Interruptor `modo_registro` eliminado, con limpieza de migración para bases viejas | aplicada |
+| `dominio_institucional_aviso` sembrado como texto, no como control | aplicada |
+| GRANT/REVOKE sobre `estaciones_publicas` y `v_desempeno` | aplicada (02, líneas 717–730) |
+| Identidad congelada: sin update de `perfiles` para nadie | aplicada (02, línea 733) |
+| `security_invoker` — off en `estaciones_publicas`, on en `v_desempeno` | aplicada y documentada en ambos archivos |
+
+Entregables en disco: `01-esquema.sql` (39 KB), `02-rls.sql` (49 KB), `03-funciones.sql` (41 KB).
+
+### Documentos actualizados
+
+- **`harness-agent.md` reescrito por completo.** Seguía describiendo la arquitectura offline de tres archivos con `localStorage` y concatenación desde `_src/`, que quedó obsoleta con el giro a Supabase. Ahora describe el modelo cliente-servidor, los 7 agentes, las 7 olas, el orden de ejecución del SQL y las seis reglas de seguridad que el harness hace cumplir. Respaldo: `_src/harness-agent.offline.bak`.
+- **`CONTRACT.md` actualizado** con lo que la Ola 1 dejó decidido: §2.1 tablas de gobierno y el círculo cerrado del arranque; el orden del trigger de alta; la columna `sesion_id` desnormalizada en `integrantes` y por qué se eligió índice único sobre trigger de validación; las decisiones de `security_invoker`; §3 con las filas de `nomina`, `docentes_autorizados` y `configuracion`, identidad congelada, GRANT de vistas y política de guardado; §4.3 orden de ejecución; §8 origen de `#lista-registrados`; §14.1 con los nombres nuevos de las claves de Supabase y el incidente registrado. Respaldo previo: `_src/CONTRACT.pre-ola1.bak`.
+
+### Cierre pendiente de la Ola 1
+
+`db-funciones` alcanzó a reportar que estaba en los últimos casos borde (seeds sin claves de tolerancia opcionales, arreglos de pistas cortos, permisos de funciones auxiliares) pero se cortó antes de confirmar. **Antes de abrir la Ola 2 hay que reanudarlo y verificar `03-funciones.sql` contra Postgres real**, como hicieron los otros dos.
+
+### Siguiente
+
+**Ola 2**, 16 subagentes en paralelo: 5 de contenido (`ct-e1`…`ct-e5`, que entregan también su `INSERT` del seed), 5 de frontend, 3 de autenticación y 3 del panel docente.

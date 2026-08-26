@@ -15,3 +15,6 @@ Thumbs.db
 
 # Andamiaje temporal del harness (se borra al integrar)
 _src/
+
+# Agentes — prompts del harness, no se suben a GitHub (quedan local)
+*-agent.md

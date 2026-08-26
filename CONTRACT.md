@@ -13,7 +13,7 @@ Arquitectura: frontend estático vanilla + **Supabase** (Postgres, Auth, RLS).
 
 1. **Frontend 100% vanilla.** HTML + CSS + JS sin frameworks, sin bundlers, sin SDK, sin CDN, sin Google Fonts, sin imágenes externas. La comunicación con Supabase se hace con `fetch` contra su API REST.
 2. **Sin `type="module"` no aplica ya** — el sitio va hospedado por HTTPS, así que los módulos ES **sí** se permiten y son preferibles. Un `import` por archivo, sin herramientas de compilación.
-3. **En el cliente solo va la clave `anon`.** La `service_role` **jamás** toca el frontend, ni un archivo `.env` que se publique, ni un comentario. Ver §14.1.
+3. **En el cliente solo va la clave publicable (`sb_publishable_…`).** La secreta (`sb_secret_…`) **jamás** toca el frontend, ni un archivo `.env` que se publique, ni un comentario. Ver §14.1.
 4. **Toda validación que importe ocurre en el servidor.** El cliente es una interfaz, no una autoridad.
 5. **Español de El Salvador**, tono de thriller corporativo de auditoría. Lenguaje inclusivo donde el caso lo usa ("persona caficultora").
 6. Requiere conexión. No hay modo offline.
@@ -133,7 +133,26 @@ create table calificaciones (
 
 **Vista de desempeño** (`v_desempeno`): por equipo — nombre, sesión, integrantes, estaciones resueltas, intentos totales, tiempo usado en segundos, motivo de fin. Es lo que exporta el panel docente.
 
-**Nómina — la lista blanca de registro.** No hay restricción por dominio: el control es la lista del curso que el docente precarga.
+### 2.1 Tablas de gobierno
+
+Dos tablas deciden quién puede existir en el sistema. Ambas van con **RLS activo y cero políticas** (§3): las lee el trigger de alta, que es `security definer`. Se tocan solo desde el SQL Editor.
+
+```sql
+create table docentes_autorizados (
+  correo text primary key, nota text, creado_en timestamptz default now()
+);
+create table configuracion ( clave text primary key, valor text );
+```
+
+`docentes_autorizados` resuelve el **círculo cerrado del arranque**: `nomina` cuelga de `sesiones`, `sesiones` exige un `docente_id` con perfil, y el perfil solo nace de la nómina — en una base nueva nadie podría registrarse jamás.
+
+Se rechazó explícitamente la alternativa de un interruptor global `modo_registro='abierto'`: un control que depende de que alguien recuerde apagarlo no es un control, y si queda encendido el registro queda abierto a cualquier correo en una base con datos personales y calificaciones. La lista blanca se cierra sola y además resuelve cómo agregar un segundo docente el año que viene.
+
+`configuracion` guarda `dominio_institucional_aviso = '@monicaherrera.edu.sv'`, que es **solo un texto para advertir** al cargar la nómina. No es un control de acceso.
+
+### 2.2 Nómina — la lista blanca de registro
+
+No hay restricción por dominio: el control es la lista del curso que el docente precarga.
 
 ```sql
 create table nomina (
@@ -150,7 +169,14 @@ create table nomina (
 
 Cumple dos funciones a la vez: lista blanca de registro, y fuente de datos para que el docente arme los equipos. Por eso cuelga de `sesiones`.
 
-**Trigger de alta:** al crearse un `auth.users`, el trigger busca el correo en `nomina`. Si no está, `raise exception`. Si está, crea el `perfiles` tomando **nombre y carné de la fila de nómina**, no de lo que escribió el estudiante: la lista la cargó el docente y es la fuente de verdad de la identidad. Luego enlaza `nomina.perfil_id`.
+**Trigger de alta** (`on_auth_user_created`), en este orden exacto:
+1. ¿El correo está en `docentes_autorizados`? → perfil con `rol='docente'`, nombre de `raw_user_meta_data`, carné derivado (`'DOC-'||substr(md5(correo),1,8)`) porque la columna es NOT NULL y UNIQUE.
+2. ¿Está en `nomina`? → perfil con `rol='estudiante'` y **nombre y carné de la fila de nómina**, no de lo que teclee el estudiante: la lista la cargó el docente y es la fuente de verdad de la identidad. Enlaza `nomina.perfil_id`.
+3. Ninguna de las dos → `raise exception`.
+
+**`integrantes` lleva una columna `sesion_id` desnormalizada**, rellenada por trigger desde `equipos` e ignorando lo que mande quien inserta, más una FK compuesta `(equipo_id, sesion_id)` que impide que las dos tablas discrepen. Sobre eso va el índice único `(sesion_id, perfil_id)` que garantiza que nadie esté en dos equipos de la misma sesión. Se eligió índice único y no trigger de validación porque un `select … if exists` tiene ventana de carrera: dos docentes asignando a la vez la atraviesan. **Los demás módulos siguen insertando `(equipo_id, perfil_id)`; la columna se llena sola.**
+
+**Vistas — decisión deliberada, no la cambies:** `estaciones_publicas` va **sin** `security_invoker` (con él heredaría la negación de RLS de `estaciones` y devolvería siempre cero filas), así que **su único control es el GRANT**. `v_desempeno` va **con** `security_invoker` para respetar el RLS de quien consulta; sin eso, cualquier estudiante se bajaría el desempeño de todos los equipos.
 
 **El dominio institucional (`@monicaherrera.edu.sv`) NO bloquea el registro.** Se usa solo al cargar la nómina, para advertirle al docente que un correo no parece institucional — atrapa errores de digitación sin dejar a nadie fuera de su propia clase.
 
@@ -166,7 +192,10 @@ Dueño: **`db-rls`**. Archivo `sql/02-rls.sql`.
 
 | Tabla | Estudiante | Docente |
 |---|---|---|
-| `perfiles` | select/update **solo el propio** | select de los perfiles de sus sesiones |
+| `perfiles` | select **solo el propio**. Sin update: identidad congelada | select de los perfiles de sus sesiones |
+| `nomina` | select **solo su propia fila** (`perfil_id = auth.uid()`) | CRUD de las de sus sesiones |
+| `docentes_autorizados` | **ninguna política — acceso denegado** | ninguna |
+| `configuracion` | **ninguna política — acceso denegado** | ninguna |
 | `sesiones` | select de aquellas donde tiene equipo | CRUD de las propias (`docente_id = auth.uid()`) |
 | `equipos` | select del propio | CRUD de los de sus sesiones |
 | `integrantes` | select de los del propio equipo | CRUD de los de sus sesiones |
@@ -177,6 +206,21 @@ Dueño: **`db-rls`**. Archivo `sql/02-rls.sql`.
 | `calificaciones` | select del propio equipo | CRUD de las de sus sesiones |
 
 `intentos` y `progreso` se escriben **exclusivamente** desde `verificar_estacion()`, que es `SECURITY DEFINER`. Un estudiante no puede insertar su propio "resuelta". Esa es la razón de ser del diseño.
+
+**Identidad congelada.** El estudiante no tiene UPDATE sobre `perfiles`, ni siquiera de su nombre. El carné es la llave con la que se califica: si puede reescribirlo, la nómina deja de ser fuente de verdad y vuelve el problema que la nómina existía para resolver. El correo tampoco, porque está atado a `auth.users` y a la fila de nómina. Si un nombre está mal escrito, **lo corrige el docente en la nómina**.
+
+**La nómina es la fuga más probable del sistema.** Contiene nombres, correos y carnés de todo el curso. Sin la restricción a la propia fila, cualquier estudiante autenticado se descargaría el directorio completo de sus compañeros.
+
+**GRANT sobre las vistas — no lo omitas.** Las vistas no tienen RLS propio; el control es el privilegio:
+
+```sql
+revoke all on estaciones_publicas from anon, authenticated;
+grant select on estaciones_publicas to authenticated;
+revoke all on v_desempeno from anon, authenticated;
+grant select on v_desempeno to authenticated;
+```
+
+**Política de guardado en migraciones.** `configuracion` y las tablas de gobierno van dentro de bloques `DO` guardados. **`nomina` va sin guardar, a propósito:** si algún día no existe, es preferible que la migración se caiga ruidosamente a que deje el directorio del curso con RLS apagado en silencio. Un fallo visible se arregla; uno silencioso se descubre cuando ya se filtraron los datos.
 
 **Función auxiliar** `es_docente_de(sesion uuid) returns boolean`, `SECURITY DEFINER`, `stable`, usada por las políticas para evitar recursión de RLS.
 
@@ -216,6 +260,13 @@ La `pista` se devuelve según el número de intento: 1 → `pistas[0]`, 2 → `p
 | `verificar_maestro(p_equipo uuid, p_codigo text)` | valida `06-87-04-2P-4` normalizado; al acertar sella `finalizado_en` y `motivo_fin='completado'` |
 | `cerrar_sesion_clase(p_sesion uuid)` | solo docente: pasa la sesión a `cerrada` y finaliza los equipos abiertos |
 | `anonimizar_sesion(p_sesion uuid)` | solo docente: sustituye nombres y carnés por marcadores, conservando el desempeño |
+
+### 4.3 Orden de ejecución del SQL — no alterar
+
+1. `01-esquema.sql` · 2. `02-rls.sql` · 3. `03-funciones.sql`
+4. `insert into docentes_autorizados (correo, nota) values ('<correo del docente>', 'docente titular');` desde el SQL Editor
+5. `05-seed.sql` — **antes de crear cualquier equipo**: `inicializar_progreso()` falla si no existen las 5 estaciones
+6. El docente se registra en la app y cae con rol docente; crea la sesión y carga la nómina
 
 **Regla de tiempo:** los segundos restantes los calcula **siempre** el servidor como `iniciado_en + duracion - now()`. El cliente los muestra e interpola entre respuestas, pero nunca son su fuente de verdad.
 
@@ -317,7 +368,7 @@ Se mantienen sin cambios: `#pantalla-dashboard`, `#pantalla-veredicto`, `#pantal
 | `#form-nomina` · `#nomina-pegar` · `#btn-cargar-nomina` | carga de la lista del curso: pegar CSV `nombre,correo,carne` |
 | `#tabla-nomina` | lista cargada, con aviso en los correos que no son del dominio institucional |
 | `#btn-agregar-a-nomina` | alta individual, para el estudiante que aparece el día de la clase |
-| `#lista-registrados` | estudiantes de la nómina que ya se registraron y aún no tienen equipo |
+| `#lista-registrados` | estudiantes de la nómina que ya se registraron y aún no tienen equipo. **Sale de `nomina` menos `integrantes`, no de `perfiles`:** el docente no puede leer perfiles de estudiantes de otras secciones |
 | `#lista-equipos` · `#btn-nuevo-equipo` | equipos de la sesión |
 | `#btn-asignar` · `#btn-desasignar` | asignación de integrantes |
 | `#tabla-monitoreo` | progreso en vivo por equipo |
@@ -423,8 +474,10 @@ Código maestro `06-87-04-2P-4`; `verificar_maestro` normaliza mayúsculas, espa
 Se almacenan datos personales de estudiantes. Estas reglas son obligatorias y `qa-seguridad` las verifica con casos **negativos**, no solo positivos.
 
 ### 14.1 Claves
-**En el frontend va únicamente la clave `anon`.** La `service_role` ignora RLS y expone la base entera: no entra al repositorio, ni al HTML, ni a un comentario, ni a un `config.js` publicado. La `anon` es pública por diseño y eso está bien: **el control de acceso es RLS, no el secreto de la clave.**
-Verificación de cierre: `grep -ri "service_role" .` → cero coincidencias.
+**En el frontend va únicamente la clave publicable (`sb_publishable_…`, antes `anon`).** La secreta (`sb_secret_…`, antes `service_role`) ignora RLS y expone la base entera: no entra al repositorio, ni al HTML, ni a un comentario, ni a un `config.js` publicado. La `anon` es pública por diseño y eso está bien: **el control de acceso es RLS, no el secreto de la clave.**
+Verificación de cierre: `grep -riE "service_role|sb_secret_[A-Za-z0-9]" .` → cero coincidencias.
+
+**Incidente registrado (2026-08-25):** la clave secreta apareció en `.env`, dentro de una carpeta sincronizada a Google Drive. Fue rotada y eliminada. `.gitignore` excluye `.env`; `.env.ejemplo` es la plantilla.
 
 ### 14.2 Autorización
 - RLS activo en todas las tablas, deny by default (§3).
