@@ -1,0 +1,10 @@
+.git
+.gitignore
+_src
+.supabase
+supabase/.temp
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

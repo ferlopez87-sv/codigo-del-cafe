@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: codigo-del-cafe
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
+    # variables opcionales (si querés sobreescribir Supabase sin tocar js/config.js)
+    # envVars:
+    #   - key: SUPABASE_URL
+    #     value: https://mdkbgjzvdwqcokuqdvvn.supabase.co
+    #   - key: SUPABASE_ANON_KEY
+    #     sync: false
+
+# Alternativa Static Site (sin Docker) — descomentá si preferís:
+# - type: web
+#   name: codigo-del-cafe-static
+#   env: static
+#   buildCommand: ""
+#   staticPublishPath: .
+#   routes:
+#     - type: rewrite
+#       source: /*
+#       destination: /index.html
