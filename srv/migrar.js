@@ -17,6 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
 import { pool } from './db.js';
+import { hashCodigo } from './email.js';
 
 const { Pool } = pg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -115,6 +116,48 @@ async function asegurarRolApp(cliente, capacidades) {
   console.log('[migrar] app_runtime listo con clave propia y permisos al día');
 }
 
+// Problema de arranque: en una base recién creada no hay NINGÚN código.
+// 04-docentes.sql solo llena la lista blanca (docentes_autorizados), que
+// habilita el alta pero no es una credencial. Las tres tablas de códigos
+// (personales, equipo, verificación) nacen vacías, así que /verificar
+// responde codigo_invalido — correctamente: no hay nada contra qué comparar.
+// La otra vía, el OTP por correo, depende de que Resend pueda entregar, y en
+// sandbox solo entrega a la casilla dueña de la cuenta. Resultado: nadie
+// puede entrar la primera vez.
+// Esto sirve el primer código personal desde una variable de entorno, que es
+// la única superficie de escritura disponible sin Shell.
+async function sembrarCodigoDocente(cliente) {
+  const codigo = process.env.BOOTSTRAP_DOCENTE_CODIGO;
+  if (!codigo) return;
+
+  let correo = (process.env.BOOTSTRAP_DOCENTE_CORREO || '').trim().toLowerCase();
+  if (!correo) {
+    // Sin correo explícito: si la lista blanca tiene exactamente uno, es ese.
+    const { rows } = await cliente.query('select correo from docentes_autorizados limit 2');
+    if (rows.length !== 1) {
+      console.warn('[migrar] BOOTSTRAP_DOCENTE_CODIGO definido pero no sé para qué correo — definí BOOTSTRAP_DOCENTE_CORREO.');
+      return;
+    }
+    correo = rows[0].correo;
+  }
+
+  const { rows } = await cliente.query('select 1 from docentes_autorizados where correo=$1', [correo]);
+  if (!rows.length) {
+    console.warn(`[migrar] ${correo} no está en docentes_autorizados — el código no serviría (el alta lo rechazaría). Omito.`);
+    return;
+  }
+
+  // hashCodigo es HMAC con COOKIE_SECRET: si esa variable cambia, todos los
+  // códigos guardados dejan de validar. Por eso se resiembra en cada arranque.
+  await cliente.query(
+    `insert into codigos_personales (correo, codigo_hash, expira_en, creado_en)
+     values ($1, $2, null, now())
+     on conflict (correo) do update set codigo_hash = excluded.codigo_hash, expira_en = null`,
+    [correo, hashCodigo(codigo)]
+  );
+  console.log(`[migrar] código personal de arranque servido para ${correo} (no vence)`);
+}
+
 // RLS solo aísla si el rol con el que se conecta la APP no es dueño de las
 // tablas (o si es dueño y hay FORCE, que exige superusuario — ver 02-rls.sql).
 // Se pregunta desde el pool de la app, no desde el de migraciones: lo que
@@ -179,6 +222,12 @@ export async function aplicarMigraciones() {
       await asegurarRolApp(cliente, capacidades);
     } catch (err) {
       console.error(`[migrar] ✗ app_runtime: ${err.message}`);
+    }
+
+    try {
+      await sembrarCodigoDocente(cliente);
+    } catch (err) {
+      console.error(`[migrar] ✗ código de arranque: ${err.message}`);
     }
 
     if (fallos.length) {
