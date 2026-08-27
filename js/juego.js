@@ -2,8 +2,17 @@
 // Dueño: cl-juego. Vanilla ES module. Único que conoce el estado global del equipo.
 // Contrato: CONTRACT.md §4.2, §5-7, §11-12. Sin llamada directa de red (usa js/api.js),
 // sin calculo de tiempo (delega a cl-timer), pinta datos con textContent.
+//
+// Reescrito 2026-08-25: de modal a tablero persistente (CONTRACT §7.2). El panel de
+// estación ya no es un diálogo que se abre/cierra — es contenido normal de la página
+// que se repinta al elegir una sala en la barra lateral (#nav-salas). Por eso ya no
+// hay foco atrapado, backdrop, ni `inert` sobre el resto de la página: no hace falta,
+// nada queda "detrás" de un overlay.
 
 import { Auth, Juego } from './api.js';
+import { renderInteraccion, serializarRespuesta } from './render.js';
+import { sincronizarDesdeEstado, onTiempoAgotado } from './timer.js';
+import { ESTACIONES_UI } from './contenido.js';
 
 // ---------------------------------------------------------------------------
 // Estado global — memoria volátil del módulo, no persiste en localStorage.
@@ -11,7 +20,12 @@ import { Auth, Juego } from './api.js';
 let equipoActual = null;
 let sesionActual = null;
 let estacionActual = null;
-let ultimoFoco = null;
+let perfilActual = null; // { id, nombre, correo, carne, rol } de Auth.sesion() — para #usuario-actual
+
+// Cache de estaciones_publicas — contenido estático por partida (§10, §5).
+// Se pide una sola vez con Juego.estaciones() y se reutiliza en cada selección de sala.
+let estacionesCache = null;
+let estacionesCargando = null;
 
 // Mapa de clases de estado admitidas por el contrato §7
 const ESTADOS_VALIDOS = ['pendiente', 'progreso', 'resuelta', 'bloqueada'];
@@ -58,10 +72,185 @@ function normalizarCodigo(codigo) {
 }
 
 // ---------------------------------------------------------------------------
+// Contenido de estaciones — Juego.estaciones() cacheado (§5, §10, §11)
+// ---------------------------------------------------------------------------
+async function obtenerEstacionesPublicas() {
+  if (estacionesCache) return estacionesCache;
+  if (estacionesCargando) return estacionesCargando;
+
+  estacionesCargando = (async () => {
+    let respuesta;
+    try {
+      respuesta = await Juego.estaciones();
+    } catch {
+      return null;
+    }
+    const datos = respuesta && 'datos' in respuesta ? respuesta.datos : respuesta;
+    const error = respuesta && 'error' in respuesta ? respuesta.error : null;
+    if (error || !Array.isArray(datos)) return null;
+    estacionesCache = datos;
+    return estacionesCache;
+  })();
+
+  const resultado = await estacionesCargando;
+  estacionesCargando = null;
+  return resultado;
+}
+
+// Fisher-Yates — usado solo para el orden inicial de E1 (contenido.js: ordenInicialAleatorio)
+function barajar(items) {
+  const copia = items.slice();
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia;
+}
+
+// El servidor entrega interaccion.items de E1 en el orden correcto (es también la
+// respuesta esperada) — ESTACIONES_UI[1].ordenInicialAleatorio pide barajar del lado
+// cliente antes de pintar, para no regalar la solución por el orden de aparición.
+function prepararInteraccion(estacion) {
+  const interaccion = estacion && estacion.interaccion;
+  if (!interaccion || typeof interaccion !== 'object') return interaccion;
+  const id = Number(estacion.id);
+  const ui = ESTACIONES_UI[id];
+  if (id === 1 && ui && ui.ordenInicialAleatorio && Array.isArray(interaccion.items)) {
+    return { ...interaccion, items: barajar(interaccion.items) };
+  }
+  return interaccion;
+}
+
+// ---------------------------------------------------------------------------
+// Pintado del contenido real de la estación dentro de #panel-estacion (§7.2, §11, §14.4)
+// Todo con textContent/createElement — nunca innerHTML con datos del servidor.
+// ---------------------------------------------------------------------------
+function humanizarClave(clave) {
+  const s = String(clave ?? '').replace(/_/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function pintarValorDato(contenedorDd, valor) {
+  if (Array.isArray(valor)) {
+    const ul = document.createElement('ul');
+    valor.forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = item && typeof item === 'object' ? JSON.stringify(item) : String(item);
+      ul.appendChild(li);
+    });
+    contenedorDd.appendChild(ul);
+  } else if (valor && typeof valor === 'object') {
+    const subDl = document.createElement('dl');
+    Object.entries(valor).forEach(([k, v]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = humanizarClave(k);
+      const dd = document.createElement('dd');
+      pintarValorDato(dd, v);
+      subDl.appendChild(dt);
+      subDl.appendChild(dd);
+    });
+    contenedorDd.appendChild(subDl);
+  } else {
+    contenedorDd.textContent = valor == null ? '' : String(valor);
+  }
+}
+
+// Cada dato del expediente se pinta como una tarjeta .exhibit (Stitch v2,
+// diseño "Forensic Audit Protocol" — superficie color papel, ver styles.css
+// §11.1). Antes era un <dl> plano; una tarjeta por dato es lo que hace que
+// el dato se lea como evidencia y no como una lista de configuración.
+function pintarDatosEstacion(contenedor, datos) {
+  while (contenedor.firstChild) contenedor.removeChild(contenedor.firstChild);
+  if (!datos || typeof datos !== 'object') return;
+  Object.entries(datos).forEach(([clave, valor]) => {
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'exhibit';
+    const etiqueta = document.createElement('span');
+    etiqueta.className = 'exhibit__etiqueta';
+    etiqueta.textContent = humanizarClave(clave);
+    const cuerpo = document.createElement('p');
+    cuerpo.className = 'exhibit__valor';
+    pintarValorDato(cuerpo, valor);
+    tarjeta.appendChild(etiqueta);
+    tarjeta.appendChild(cuerpo);
+    contenedor.appendChild(tarjeta);
+  });
+}
+
+function pintarTituloEstacion(estacion) {
+  // #estacion-titulo (CONTRACT §7.2): antes #modal-estacion-titulo, renombrado
+  // porque ya no vive dentro de un diálogo modal.
+  const h2 = $('estacion-titulo');
+  if (h2) h2.textContent = estacion.titulo || `Estación ${estacion.id}`;
+  const pilarEl = $('estacion-pilar');
+  if (pilarEl) pilarEl.textContent = estacion.pilar || '';
+}
+
+function pintarNarrativaEstacion(texto) {
+  const cont = $('estacion-narrativa');
+  if (!cont) return;
+  while (cont.firstChild) cont.removeChild(cont.firstChild);
+  const p = document.createElement('p');
+  p.textContent = texto || '';
+  cont.appendChild(p);
+}
+
+function pintarRetoEstacion(texto) {
+  const el = $('estacion-reto-texto');
+  if (!el) return;
+  const strongPrevio = el.querySelector('strong');
+  while (el.firstChild) el.removeChild(el.firstChild);
+  if (strongPrevio) {
+    el.appendChild(strongPrevio);
+  } else {
+    const s = document.createElement('strong');
+    s.textContent = 'Reto:';
+    el.appendChild(s);
+  }
+  el.appendChild(document.createTextNode(' ' + (texto || '')));
+}
+
+async function pintarEstacionEnPanel(id) {
+  const lista = await obtenerEstacionesPublicas();
+  if (!lista) {
+    mostrarFeedbackEstacion('No se pudo cargar el contenido de la estación. Revisá tu conexión.', 'error');
+    return;
+  }
+  const estacion = lista.find((e) => Number(e.id) === Number(id));
+  if (!estacion) {
+    mostrarFeedbackEstacion('No se encontró el contenido de esta estación.', 'error');
+    return;
+  }
+
+  pintarTituloEstacion(estacion);
+  pintarNarrativaEstacion(estacion.narrativa);
+
+  const datosEl = $('estacion-datos');
+  if (datosEl) pintarDatosEstacion(datosEl, estacion.datos);
+
+  pintarRetoEstacion(estacion.reto);
+
+  const interaccionEl = $('estacion-interaccion');
+  if (interaccionEl) {
+    renderInteraccion(interaccionEl, prepararInteraccion(estacion));
+    if(!soyApuntador){
+      interaccionEl.querySelectorAll('input,select,button,textarea').forEach(el=>{ el.disabled = true; });
+      const b = $('btn-verificar-estacion'); if(b){ b.disabled=true; b.setAttribute('aria-disabled','true'); }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 1. initJuego() — puerta de entrada de juego.html
 // ---------------------------------------------------------------------------
 export async function initJuego() {
   // §1 y §7: cada página verifica sesión al cargar y redirige.
+  // OJO (bug real encontrado con navegador real 2026-08-26, no con stubs):
+  // Auth.sesion() devuelve siempre { datos, error } — ese objeto envoltorio
+  // nunca es falsy, aunque datos sea null. `if (!sesion)` nunca disparaba, así
+  // que juego.html seguía de largo sin sesión y llamaba a Juego.miEquipo()
+  // igual (404 real contra Supabase). Hay que revisar `.datos`, como ya hace
+  // (correctamente) initDocente() en js/docente.js.
   let sesion = null;
   try {
     const r = Auth.sesion();
@@ -70,10 +259,14 @@ export async function initJuego() {
     sesion = null;
   }
 
-  if (!sesion) {
-    window.location.href = 'index.html';
+  const datosSesion = sesion?.datos;
+  // Cookie httpOnly: no hay access_token. Sesión válida si hay datos y no hay error (401 → error)
+  if (!datosSesion || sesion?.error) {
+    window.location.href = 'index.html#vista-acceso';
     return;
   }
+  perfilActual = datosSesion;
+  pintarUsuarioActual();
 
   let respuesta;
   try {
@@ -88,8 +281,7 @@ export async function initJuego() {
   const error = respuesta && 'error' in respuesta ? respuesta.error : null;
 
   if (error) {
-    const msg = typeof error === 'string' ? error : error.message || 'Error al cargar el equipo.';
-    mostrarErrorGlobal(msg);
+    mostrarErrorGlobal(mensajeDeError(error));
     return;
   }
 
@@ -118,6 +310,12 @@ export async function initJuego() {
   equipoActual = equipo;
   sesionActual = datos.sesion || null;
 
+  // Se enlaza ANTES de pintar/cargar estado: cargarEstado() más abajo puede
+  // sincronizar cl-timer por primera vez, y si el tiempo ya estaba agotado al
+  // entrar, onTiempoAgotado() debe estar registrado para que _dispararTiempoAgotado()
+  // no caiga en su fallback silencioso por falta de callback.
+  enlazarEventosUnaVez();
+
   ocultarSinEquipo();
   // §7: sala de espera si aún no arranca el reloj (iniciado_en null)
   const iniciado = equipo?.iniciado_en || datos.iniciado_en || datos.equipo?.iniciado_en;
@@ -127,32 +325,42 @@ export async function initJuego() {
     mostrarDashboard();
   }
 
-  // Primer pintado con lo que ya trae miEquipo(); luego refresco vía estado_juego().
-  if (Array.isArray(datos.estaciones)) {
-    pintarEstadoDesdeDatos(datos);
-  }
+  // Primer pintado con lo que ya trae miEquipo(). OJO (bug real encontrado
+  // en navegador, no con stubs): esto estaba gateado por
+  // `Array.isArray(datos.estaciones)`, pero miEquipo() nunca trae esa
+  // clave (solo estado_juego() la trae) — así que pintarEstadoDesdeDatos()
+  // nunca corría acá, y el bloque de adentro que lee `soy_apuntador` y
+  // pinta integrantes/nombre de equipo tampoco. Resultado: CUALQUIERA veía
+  // el botón de enviar respuesta habilitado como si fuera el apuntador
+  // (el valor por defecto de soyApuntador nunca se corregía), hasta que
+  // intentaba enviar y el servidor lo rechazaba — eso es lo que se
+  // reportaba como "error de red" al enviar la primera respuesta.
+  // pintarEstadoDesdeDatos() ya tolera la ausencia de `estaciones` (usa []
+  // como fallback), así que llamarla siempre acá es seguro; estado_juego()
+  // pinta encima con los datos reales de las salas un instante después.
+  pintarEstadoDesdeDatos(datos);
 
   await cargarEstado(equipoId);
-  enlazarEventosUnaVez();
 }
 
 // ---------------------------------------------------------------------------
 // Visibilidad de pantallas §7
 // ---------------------------------------------------------------------------
+// Las 5 pantallas de nivel superior de juego.html (CONTRACT §9/§11) son
+// mutuamente excluyentes. Antes solo se manejaban bienvenida/sin-equipo/
+// dashboard entre sí — veredicto y resumen se quedaban sin `hidden` inicial
+// y ninguna función las ocultaba, así que aparecían siempre superpuestas al
+// tablero (bug real, encontrado probando en navegador). Este helper es el
+// único punto que las oculta todas antes de mostrar la que corresponde.
+function ocultarPantallasSuperiores() {
+  ['sin-equipo', 'pantalla-dashboard', 'pantalla-bienvenida', 'pantalla-veredicto', 'pantalla-resumen']
+    .forEach((id) => { const el = $(id); if (el) el.setAttribute('hidden', ''); });
+}
+
 function mostrarSinEquipo() {
+  ocultarPantallasSuperiores();
   const sinEquipo = $('sin-equipo');
-  const dashboard = $('pantalla-dashboard');
-  const bienvenida = $('pantalla-bienvenida');
-  if (sinEquipo) {
-    sinEquipo.removeAttribute('hidden');
-  }
-  if (dashboard) {
-    dashboard.setAttribute('hidden', '');
-  }
-  if (bienvenida) {
-    // Sala de espera solo si hay equipo; sin equipo se oculta también.
-    bienvenida.setAttribute('hidden', '');
-  }
+  if (sinEquipo) sinEquipo.removeAttribute('hidden');
 }
 
 function ocultarSinEquipo() {
@@ -163,10 +371,9 @@ function ocultarSinEquipo() {
 }
 
 function mostrarBienvenida(){
+  ocultarPantallasSuperiores();
   const bienvenida=$('pantalla-bienvenida');
-  const dash=$('pantalla-dashboard');
   if(bienvenida) bienvenida.removeAttribute('hidden');
-  if(dash) dash.setAttribute('hidden','');
   // Mostrar nombre equipo e integrantes en bienvenida si están disponibles
   if(equipoActual){
     const nombreEl=$('bienvenida-equipo-nombre');
@@ -174,12 +381,9 @@ function mostrarBienvenida(){
   }
 }
 function mostrarDashboard() {
+  ocultarPantallasSuperiores();
   const dash = $('pantalla-dashboard');
-  const bienvenida=$('pantalla-bienvenida');
-  if (dash) {
-    dash.removeAttribute('hidden');
-  }
-  if(bienvenida) bienvenida.setAttribute('hidden','');
+  if (dash) dash.removeAttribute('hidden');
 }
 
 function mostrarErrorGlobal(mensaje) {
@@ -211,13 +415,12 @@ export async function cargarEstado(equipoId) {
   const error = respuesta && 'error' in respuesta ? respuesta.error : null;
 
   if (error) {
-    const msg = typeof error === 'string' ? error : error.message || 'Error al cargar el estado.';
     // Errores esperados del servidor (§4.1): no_autorizado, sesion_cerrada, tiempo_agotado
     if (datos && datos.error) {
       manejarErrorEstado(datos.error);
       return;
     }
-    mostrarErrorGlobal(msg);
+    mostrarErrorGlobal(mensajeDeError(error));
     return;
   }
 
@@ -251,8 +454,25 @@ function mensajeErrorServidor(codigo) {
     case 'tiempo_agotado': return 'Se agotó el tiempo de la sesión.';
     case 'bloqueada': return 'Esta estación sigue bloqueada. Resolvé las cuatro anteriores primero.';
     case 'estacion_invalida': return 'Estación no válida.';
+    case 'no_apuntador': return 'Solo la persona apuntadora del equipo puede enviar respuestas. Pedile que la mande ella.';
+    case 'sin_apuntador': return 'Tu equipo todavía no tiene apuntador/a — pedile al docente que marque uno en el panel.';
+    case 'red': return 'Sin conexión. Verificá tu internet e intentá de nuevo.';
+    case 'error_interno': return 'Error del servidor. Intentá de nuevo en un momento.';
     default: return String(codigo);
   }
+}
+
+// api.js (§5.2) siempre entrega los errores como OBJETO {mensaje, codigo,
+// estado} — nunca como string. Los `typeof error === 'string'` que había en
+// cada llamador de acá abajo nunca eran ciertos, así que CUALQUIER rechazo
+// del servidor (apuntador equivocado, estación bloqueada, sesión cerrada,
+// lo que sea) cascaba al mismo "Error de red." genérico, sin decir qué
+// pasó — eso es lo que se reportaba como "error de red" al enviar la
+// primera respuesta, cuando en realidad era p.ej. "no_apuntador".
+function mensajeDeError(error) {
+  if (!error) return mensajeErrorServidor('red');
+  if (typeof error === 'string') return mensajeErrorServidor(error);
+  return mensajeErrorServidor(error.codigo || 'red');
 }
 
 function deshabilitarInteraccionesPorCierre(codigo) {
@@ -263,8 +483,42 @@ function deshabilitarInteraccionesPorCierre(codigo) {
 }
 
 // ---------------------------------------------------------------------------
-// Pintado — tarjetas, barra, contador, fragmentos (§7)
+// Pintado — barra lateral, panel, contador, fragmentos (§7.2)
 // ---------------------------------------------------------------------------
+// Quién está logueado debe verse todo el tiempo (§sidebar-salas, fuera de
+// las <section> que se ocultan/muestran entre pantallas) — antes no había
+// ningún indicador y era fácil perder de vista con qué cuenta se estaba
+// jugando, sobre todo probando varios integrantes del mismo equipo seguido.
+function pintarUsuarioActual(){
+  const el = $('usuario-actual-texto');
+  if(!el || !perfilActual) return;
+  const base = perfilActual.nombre || perfilActual.correo || '';
+  el.textContent = soyApuntador ? `${base} ★ apuntador/a` : base;
+}
+
+let soyApuntador = true;
+let nombreApuntador = '';
+function aplicarModoApuntador(soy, nombre){
+  soyApuntador = soy !== false;
+  nombreApuntador = nombre || '';
+  pintarUsuarioActual();
+  const aviso = $('aviso-solo-apuntador');
+  const btn = $('btn-verificar-estacion');
+  const btnM = $('btn-verificar-maestro');
+  const txt = $('aviso-solo-apuntador-texto') || (aviso ? aviso.querySelector('span:last-child') : null);
+  if(!soyApuntador){
+    if(aviso){ aviso.removeAttribute('hidden'); if(txt) txt.textContent = `Solo ${nombreApuntador || 'tu apuntador'} puede enviar la respuesta de tu equipo. Podés seguir el expediente y discutir con tu equipo.`; }
+    if(btn){ btn.disabled = true; btn.setAttribute('aria-disabled','true'); }
+    if(btnM){ btnM.disabled = true; btnM.setAttribute('aria-disabled','true'); }
+    // deshabilitar controles de interacción actuales
+    const inter = $('estacion-interaccion');
+    if(inter) inter.querySelectorAll('input,select,button,textarea').forEach(el=>{ el.disabled = true; });
+  } else {
+    if(aviso) aviso.setAttribute('hidden','');
+    if(btn){ btn.disabled = false; btn.removeAttribute('aria-disabled'); }
+    if(btnM){ btnM.disabled = false; btnM.removeAttribute('aria-disabled'); }
+  }
+}
 function pintarEstadoDesdeDatos(datos) {
   const estaciones = Array.isArray(datos.estaciones) ? datos.estaciones : [];
   const resueltas = typeof datos.resueltas === 'number'
@@ -274,18 +528,46 @@ function pintarEstadoDesdeDatos(datos) {
   pintarTarjetas(estaciones);
   pintarBarraProgreso(resueltas, 5);
   pintarFragmentos(estaciones);
+  // Apuntador §4.1 §11
+  if('soy_apuntador' in datos || 'soyApuntador' in datos){
+    const soy = datos.soy_apuntador ?? datos.soyApuntador;
+    const integrantes = datos.integrantes || datos.equipo?.integrantes || [];
+    let nombre = '';
+    if(Array.isArray(integrantes)){
+      const ap = integrantes.find(i=> i.es_apuntador || i.esApuntador);
+      if(ap) nombre = ap.nombre || ap.correo || '';
+    }
+    aplicarModoApuntador(soy, nombre);
+    // pintar lista de integrantes con indicador
+    const ul = $('lista-integrantes');
+    if(ul && Array.isArray(integrantes)){
+      while(ul.firstChild) ul.removeChild(ul.firstChild);
+      integrantes.forEach(it=>{
+        const li=document.createElement('li');
+        li.className = it.es_apuntador ? 'integrante--apuntador font-bold' : '';
+        li.textContent = `${it.nombre || it.correo}${it.es_apuntador ? ' — apuntador/a ★' : ''}`;
+        li.setAttribute('role','listitem');
+        ul.appendChild(li);
+      });
+    }
+    // nombre equipo
+    const ne = $('nombre-equipo-activo'); if(ne) ne.textContent = datos.equipo?.nombre || datos.nombre || ne.textContent;
+    const be = $('bienvenida-equipo-nombre'); if(be) be.textContent = `Equipo: ${datos.equipo?.nombre || datos.nombre || '—'}`;
+  }
 
   // El tiempo lo posee el servidor; aquí no se calcula ni se interpola.
-  // Se emite un evento para que cl-timer lo consuma si está presente.
-  if (typeof datos.segundos_restantes === 'number') {
-    window.dispatchEvent(new CustomEvent('juego:segundos', {
-      detail: { segundos: datos.segundos_restantes, servidorEn: datos.servidor_en },
-    }));
+  // cl-timer recibe el estado crudo y hace su propio cálculo/interpolación (§7).
+  if (typeof datos.segundos_restantes === 'number' || datos.tiempo_agotado) {
+    sincronizarDesdeEstado(datos);
   }
 }
 
 function pintarTarjetas(estaciones) {
-  const lista = $('lista-estaciones');
+  // #nav-salas (CONTRACT §7.2): antes #lista-estaciones. Los botones siguen
+  // siendo .estacion-card[data-estacion] — mismas clases de estado, mismo
+  // tratamiento visual con icono (nunca solo color, §13), solo cambió el
+  // contenedor que los agrupa (de grilla de tarjetas a lista de la barra lateral).
+  const lista = $('nav-salas');
   if (!lista) return;
 
   estaciones.forEach((est) => {
@@ -298,7 +580,7 @@ function pintarTarjetas(estaciones) {
     card.classList.remove(...CLASES_ESTADO);
     card.classList.add(`is-${estado}`);
 
-    // Accesibilidad: aria-disabled en bloqueada, aria-expanded colapsada
+    // Accesibilidad: aria-disabled en bloqueada
     if (estado === 'bloqueada') card.setAttribute('aria-disabled', 'true');
     else card.removeAttribute('aria-disabled');
 
@@ -316,7 +598,6 @@ function pintarTarjetas(estaciones) {
       card.setAttribute('tabindex', '-1');
     } else {
       card.setAttribute('tabindex', '0');
-      card.setAttribute('role', 'button');
     }
   });
 }
@@ -380,93 +661,41 @@ function pintarFragmentos(estaciones) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Modal #modal-estacion — abrir/cerrar, foco, Esc (§13)
+// 3. #panel-estacion — seleccionar sala (antes: abrir/cerrar modal, §7.2)
 // ---------------------------------------------------------------------------
-export function abrirModal(estacionId) {
-  const modal = $('modal-estacion');
-  const backdrop = $('modal-backdrop');
-  if (!modal) return;
-
+export async function seleccionarSala(estacionId) {
   const id = Number(estacionId);
   if (!Number.isInteger(id) || id < 1 || id > 5) return;
 
-  // Bloqueada no se abre — el servidor es la autoridad, pero evitamos el viaje inútil.
+  // Bloqueada no se selecciona — el servidor es la autoridad, pero evitamos el viaje inútil.
   const card = document.querySelector(`.estacion-card[data-estacion="${id}"]`);
   if (card && card.classList.contains('is-bloqueada')) return;
 
   estacionActual = id;
-  ultimoFoco = document.activeElement;
 
-  // Mostrar modal
-  modal.removeAttribute('hidden');
-  modal.setAttribute('aria-modal', 'true');
-  modal.setAttribute('role', 'dialog');
+  // Marcar cuál sala está activa en la barra lateral (aria-current, §13)
+  document.querySelectorAll('#nav-salas .estacion-card[data-estacion]').forEach((c) => {
+    c.setAttribute('aria-current', c === card ? 'true' : 'false');
+  });
 
-  if (backdrop) {
-    backdrop.removeAttribute('hidden');
-    backdrop.setAttribute('aria-hidden', 'true');
-  }
+  // Mostrar el panel de contenido, ocultar el estado vacío inicial
+  setHidden($('panel-estacion-vacio'), true);
+  setHidden($('panel-estacion-contenido'), false);
 
-  // Inert + aria-hidden en el fondo mientras el modal está abierto (§13)
-  const main = document.querySelector('main');
-  const barra = $('barra-superior');
-  if (main) { main.setAttribute('aria-hidden', 'true'); main.inert = true; }
-  if (barra) { barra.setAttribute('aria-hidden', 'true'); barra.inert = true; }
-
-  // Bloquear scroll del body — clase controlada por CSS
-  document.body.classList.add('is-modal-abierto');
-
-  // Actualizar aria-expanded de la tarjeta que abrió
-  if (card) card.setAttribute('aria-expanded', 'true');
-
-  // Limpiar feedback previo
+  // Limpiar feedback previo de la sala anterior
   limpiarFeedbackEstacion();
 
-  // Foco inicial: primer elemento enfocable dentro del modal, o el botón cerrar
-  const focoInicial = modal.querySelector(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  ) || $('btn-cerrar-modal') || modal;
-  if (focoInicial && typeof focoInicial.focus === 'function') {
-    // tabindex -1 si el contenedor mismo recibe foco
-    if (focoInicial === modal && !modal.hasAttribute('tabindex')) modal.setAttribute('tabindex', '-1');
-    focoInicial.focus();
+  // Narrativa/datos/reto/interacción real de estaciones_publicas (§5, §11)
+  await pintarEstacionEnPanel(id);
+
+  // Foco al título de la nueva sala — equivalente accesible a lo que hacía el
+  // modal, sin el resto del aparataje de diálogo (ya no hace falta atrapar
+  // foco ni restaurarlo: el panel es contenido normal de la página, no un overlay).
+  const h2 = $('estacion-titulo');
+  if (h2) {
+    if (!h2.hasAttribute('tabindex')) h2.setAttribute('tabindex', '-1');
+    h2.focus();
   }
-
-  // Cargar datos de la estación si hay capa de contenido disponible (opcional)
-  // No se asume que exista; el modal puede ser pintado por cl-render.
-  window.dispatchEvent(new CustomEvent('juego:abrir-estacion', { detail: { estacionId: id } }));
-}
-
-export function cerrarModal() {
-  const modal = $('modal-estacion');
-  const backdrop = $('modal-backdrop');
-  if (!modal || modal.hasAttribute('hidden')) return;
-
-  modal.setAttribute('hidden', '');
-  if (backdrop) {
-    backdrop.setAttribute('hidden', '');
-  }
-
-  const main = document.querySelector('main');
-  const barra = $('barra-superior');
-  if (main) { main.removeAttribute('aria-hidden'); main.inert = false; }
-  if (barra) { barra.removeAttribute('aria-hidden'); barra.inert = false; }
-
-  document.body.classList.remove('is-modal-abierto');
-
-  // Restaurar aria-expanded
-  if (estacionActual != null) {
-    const card = document.querySelector(`.estacion-card[data-estacion="${estacionActual}"]`);
-    if (card) card.setAttribute('aria-expanded', 'false');
-  }
-
-  // Devolver foco a la tarjeta que abrió
-  const destino = ultimoFoco && document.contains(ultimoFoco) ? ultimoFoco
-    : document.querySelector(`.estacion-card[data-estacion="${estacionActual}"]`);
-  if (destino && typeof destino.focus === 'function') destino.focus();
-
-  estacionActual = null;
-  ultimoFoco = null;
 }
 
 function limpiarFeedbackEstacion() {
@@ -478,29 +707,6 @@ function limpiarFeedbackEstacion() {
   }
   const intentos = $('estacion-intentos');
   if (intentos) intentos.textContent = '';
-}
-
-// Trampa de foco dentro del modal — Tab/Shift+Tab cicla (§13)
-function atraparFoco(e) {
-  const modal = $('modal-estacion');
-  if (!modal || modal.hasAttribute('hidden')) return;
-  if (e.key !== 'Tab') return;
-
-  const focusables = modal.querySelectorAll(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
-  if (focusables.length === 0) return;
-
-  const primero = focusables[0];
-  const ultimo = focusables[focusables.length - 1];
-
-  if (e.shiftKey && document.activeElement === primero) {
-    e.preventDefault();
-    ultimo.focus();
-  } else if (!e.shiftKey && document.activeElement === ultimo) {
-    e.preventDefault();
-    primero.focus();
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -515,9 +721,10 @@ export async function verificarEstacion() {
     return;
   }
 
-  const respuesta = construirRespuesta(estacionId);
-  // Validación mínima cliente: si vino vacío, igual se envía para que el servidor
+  // serializarRespuesta() lee el estado interno que dejó el último renderInteraccion()
+  // (cl-render, §11-12). Si vino vacío, igual se envía para que el servidor
   // devuelva detalle "vacio" y la pista escalonada; no se bloquea el envío.
+  const respuesta = serializarRespuesta();
 
   let result;
   try {
@@ -531,7 +738,7 @@ export async function verificarEstacion() {
   const error = result && 'error' in result ? result.error : null;
 
   if (error && !datos) {
-    mostrarFeedbackEstacion(typeof error === 'string' ? error : 'Error de red.', 'error');
+    mostrarFeedbackEstacion(mensajeDeError(error), 'error');
     return;
   }
 
@@ -554,10 +761,8 @@ export async function verificarEstacion() {
   if (datos.ok === true) {
     const feedback = datos.feedback || '¡Correcto!';
     const intentos = datos.intentos != null ? `Intento ${datos.intentos}` : '';
+    // mostrarFeedbackEstacion ya escribe #estacion-intentos vía su parámetro intentosTexto.
     mostrarFeedbackEstacion(feedback, 'ok', intentos);
-    // Actualizar contador de intentos visible
-    const elIntentos = $('estacion-intentos');
-    if (elIntentos) elIntentos.textContent = intentos;
     // Refrescar estado global (barra, tarjetas, fragmentos)
     await cargarEstado(equipoId);
     // Notificar a quien renderiza el veredicto/fragmentos
@@ -579,9 +784,8 @@ export async function verificarEstacion() {
       // Mensaje adicional permitido por §12 sin revelar cuál acertó
       texto = `${texto} — Vas por buen camino, revisá lo que falta.`;
     }
+    // mostrarFeedbackEstacion ya escribe #estacion-intentos vía su parámetro intentosTexto.
     mostrarFeedbackEstacion(texto, 'alerta', intentos);
-    const elIntentos = $('estacion-intentos');
-    if (elIntentos) elIntentos.textContent = intentos;
     // Refrescar tarjetas por si el estado pasó a "progreso"
     await cargarEstado(equipoId);
     return;
@@ -631,170 +835,6 @@ function mostrarFeedbackEstacion(texto, estado, intentosTexto) {
 }
 
 // ---------------------------------------------------------------------------
-// Construcción del jsonb por estación (§12)
-// ---------------------------------------------------------------------------
-function construirRespuesta(estacionId) {
-  const modal = $('modal-estacion');
-  const scope = modal && !modal.hasAttribute('hidden') ? modal : document;
-
-  switch (Number(estacionId)) {
-    case 1: return construirE1(scope);
-    case 2: return construirE2(scope);
-    case 3: return construirE3(scope);
-    case 4: return construirE4(scope);
-    case 5: return construirE5(scope);
-    default: return {};
-  }
-}
-
-function construirE1(scope) {
-  // { orden:[ids], eslabon:"cultivo" }
-  // Orden: lee el orden actual del DOM (botones ↑/↓ reordenan).
-  // Soporta múltiples selectores por compatibilidad con cl-render.
-  const orden = [];
-  const candidatos = scope.querySelectorAll(
-    '[data-orden-item], .orden-item[data-id], #lista-orden [data-id], #estacion-interaccion [data-id]'
-  );
-  // Si el render usa una lista dedicada, priorizar esa lista
-  const listaOrden = scope.querySelector('#lista-orden') || scope.querySelector('[data-lista="orden"]');
-  const fuente = listaOrden ? listaOrden.querySelectorAll('[data-id]') : candidatos;
-  fuente.forEach((el) => {
-    const id = (el.getAttribute('data-id') || el.getAttribute('data-orden-item') || '').trim().toLowerCase();
-    if (id) orden.push(id);
-  });
-  // Fallback: si no se encontró nada, intentar leer un input hidden con el orden serializado
-  if (orden.length === 0) {
-    const hidden = scope.querySelector('input[name="orden"], input[data-campo="orden"]');
-    if (hidden && hidden.value) {
-      try {
-        const parsed = JSON.parse(hidden.value);
-        if (Array.isArray(parsed)) return { orden: parsed.map((s) => String(s).toLowerCase().trim()), eslabon: leerEslabon(scope) };
-      } catch { /* ignorar */ }
-    }
-  }
-  return { orden, eslabon: leerEslabon(scope) };
-}
-
-function leerEslabon(scope) {
-  // Busca el radio/select del eslabón crítico
-  const checked = scope.querySelector('input[name="eslabon"]:checked, input[data-campo="eslabon"]:checked');
-  if (checked) return String(checked.value).trim().toLowerCase();
-  const sel = scope.querySelector('select[name="eslabon"], select[data-campo="eslabon"], #campo-eslabon');
-  if (sel) return String(sel.value).trim().toLowerCase();
-  const txt = scope.querySelector('input[name="eslabon"], input[data-campo="eslabon"]');
-  if (txt) return String(txt.value).trim().toLowerCase();
-  return '';
-}
-
-function construirE2(scope) {
-  // { porcentaje:n, enganosa:"si"|"no" }
-  const pct = leerNumero(scope, 'porcentaje');
-  const eng = leerRadioOSelect(scope, 'enganosa');
-  const out = {};
-  if (pct != null) out.porcentaje = pct;
-  if (eng) out.enganosa = eng.toLowerCase();
-  return out;
-}
-
-function construirE3(scope) {
-  // { porcentaje:n, inconsistencia:"a"|"b"|"c" }
-  const pct = leerNumero(scope, 'porcentaje');
-  const inc = leerRadioOSelect(scope, 'inconsistencia');
-  const out = {};
-  if (pct != null) out.porcentaje = pct;
-  if (inc) out.inconsistencia = inc.toLowerCase();
-  return out;
-}
-
-function construirE4(scope) {
-  // { actores:[ids] }
-  const checks = scope.querySelectorAll(
-    'input[name="actores"]:checked, input[data-campo="actores"]:checked, input[type="checkbox"][data-actor]:checked, #estacion-interaccion input[type="checkbox"]:checked'
-  );
-  const actores = [];
-  checks.forEach((c) => {
-    const v = (c.value || c.getAttribute('data-actor') || c.getAttribute('data-id') || '').trim().toLowerCase();
-    if (v) actores.push(v);
-  });
-  return { actores };
-}
-
-function construirE5(scope) {
-  // { frases:[5] } — valores: "sin_evidencia" | "enganosa" | "verificable"
-  // Orden posicional: f1..f5 según interaccion.items del seed.
-  const frases = [];
-  // Intenta selects/radios por frase
-  for (let i = 1; i <= 5; i++) {
-    const sel = scope.querySelector(
-      `select[data-frase="${i}"], select[name="frase-${i}"], select[data-frase-id="f${i}"]`
-    );
-    if (sel) {
-      const v = String(sel.value || '').trim().toLowerCase();
-      frases.push(v || '');
-      continue;
-    }
-    const checked = scope.querySelector(
-      `input[name="frase-${i}"]:checked, input[name="f${i}"]:checked, input[data-frase="${i}"]:checked`
-    );
-    if (checked) {
-      frases.push(String(checked.value).trim().toLowerCase());
-      continue;
-    }
-    // Fallback: inputs con data-frase
-    const inp = scope.querySelector(`[data-frase="${i}"]`);
-    if (inp && inp.value) {
-      frases.push(String(inp.value).trim().toLowerCase());
-      continue;
-    }
-    frases.push('');
-  }
-  // Si no se encontró nada con el patrón anterior, intentar leer todos los selects de clasificación
-  if (frases.every((f) => f === '')) {
-    const todos = scope.querySelectorAll('#estacion-interaccion select, [data-rol="clasificacion"] select');
-    if (todos.length === 5) {
-      return { frases: Array.from(todos, (s) => String(s.value || '').trim().toLowerCase()) };
-    }
-    // Último fallback: radios agrupados por contenedor
-    const grupos = scope.querySelectorAll('[data-frase-grupo]');
-    if (grupos.length === 5) {
-      return {
-        frases: Array.from(grupos, (g) => {
-          const c = g.querySelector('input:checked, select');
-          return c ? String(c.value || '').trim().toLowerCase() : '';
-        }),
-      };
-    }
-  }
-  // Filtrar vacíos finales si el usuario no completó todo: se envía lo que haya;
-  // el servidor devuelve "vacio" o "parcial-n" según §12.
-  // Pero mantenemos longitud 5 si hay algún valor, rellenando con ''.
-  const tieneAlgo = frases.some((f) => f !== '');
-  if (!tieneAlgo) return { frases: [] };
-  return { frases };
-}
-
-function leerNumero(scope, campo) {
-  const el = scope.querySelector(
-    `input[data-campo="${campo}"], #campo-${campo}, input[name="${campo}"], input[id="${campo}"]`
-  );
-  if (!el) return null;
-  const raw = String(el.value || '').trim().replace(',', '.');
-  if (raw === '') return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-function leerRadioOSelect(scope, campo) {
-  const checked = scope.querySelector(`input[name="${campo}"]:checked, input[data-campo="${campo}"]:checked`);
-  if (checked) return String(checked.value).trim();
-  const sel = scope.querySelector(`select[name="${campo}"], select[data-campo="${campo}"], #campo-${campo}`);
-  if (sel) return String(sel.value).trim();
-  const txt = scope.querySelector(`input[name="${campo}"], input[data-campo="${campo}"]`);
-  if (txt) return String(txt.value).trim();
-  return '';
-}
-
-// ---------------------------------------------------------------------------
 // 5. Código maestro — normaliza con regex y llama Juego.verificarMaestro()
 // ---------------------------------------------------------------------------
 export async function verificarCodigoMaestro(codigoRaw) {
@@ -836,7 +876,7 @@ export async function verificarCodigoMaestro(codigoRaw) {
   const error = result && 'error' in result ? result.error : null;
 
   if (error && !datos) {
-    setFeedbackMaestro(typeof error === 'string' ? error : 'Error de red.', 'error');
+    setFeedbackMaestro(mensajeDeError(error), 'error');
     return { ok: false };
   }
 
@@ -847,13 +887,18 @@ export async function verificarCodigoMaestro(codigoRaw) {
 
   if (datos && datos.ok === true) {
     setFeedbackMaestro('¡Código correcto! Veredicto desbloqueado.', 'ok');
-    // Revelar veredicto si existe el contenedor
+    // Revelar veredicto — y ocultar el tablero, antes se quedaban los dos
+    // superpuestos porque nada apagaba #pantalla-dashboard acá.
+    ocultarPantallasSuperiores();
     const veredicto = $('pantalla-veredicto');
     if (veredicto) {
       veredicto.removeAttribute('hidden');
     }
     const texto = $('texto-veredicto');
-    if (texto) texto.removeAttribute('hidden');
+    if (texto) {
+      texto.removeAttribute('hidden');
+      if (datos.veredicto) texto.textContent = datos.veredicto;
+    }
     window.dispatchEvent(new CustomEvent('juego:maestro-ok', { detail: datos }));
     return { ok: true, datos };
   }
@@ -886,15 +931,15 @@ function enlazarEventosUnaVez() {
   if (eventosEnlazados) return;
   eventosEnlazados = true;
 
-  // Delegación para abrir modal desde tarjetas
-  const lista = $('lista-estaciones');
+  // Delegación para seleccionar sala desde la barra lateral (#nav-salas, §7.2)
+  const lista = $('nav-salas');
   if (lista) {
     lista.addEventListener('click', (e) => {
       const card = e.target.closest('.estacion-card[data-estacion]');
       if (!card) return;
       if (card.classList.contains('is-bloqueada') || card.getAttribute('aria-disabled') === 'true') return;
       const id = card.getAttribute('data-estacion');
-      abrirModal(id);
+      seleccionarSala(id);
     });
     lista.addEventListener('keydown', (e) => {
       const card = e.target.closest('.estacion-card[data-estacion]');
@@ -902,17 +947,10 @@ function enlazarEventosUnaVez() {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         if (card.classList.contains('is-bloqueada')) return;
-        abrirModal(card.getAttribute('data-estacion'));
+        seleccionarSala(card.getAttribute('data-estacion'));
       }
     });
   }
-
-  // Cerrar modal
-  const btnCerrar = $('btn-cerrar-modal');
-  if (btnCerrar) btnCerrar.addEventListener('click', cerrarModal);
-
-  const backdrop = $('modal-backdrop');
-  if (backdrop) backdrop.addEventListener('click', cerrarModal);
 
   // Botón Iniciar auditoría — sala de espera §7
   const btnIniciar = $('btn-iniciar');
@@ -926,7 +964,7 @@ function enlazarEventosUnaVez() {
     if(id) await cargarEstado(id);
   });
 
-  // Botón verificar dentro del modal — id puede variar; cubrimos variantes
+  // Botón verificar dentro de #panel-estacion
   const btnVerificar = $('btn-verificar-estacion') || $('estacion-verificar') || document.querySelector('[data-accion="verificar-estacion"]');
   if (btnVerificar) btnVerificar.addEventListener('click', verificarEstacion);
 
@@ -944,16 +982,11 @@ function enlazarEventosUnaVez() {
     });
   }
 
-  // Teclado global: Esc cierra modal, Tab atrapa foco
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      const modal = $('modal-estacion');
-      if (modal && !modal.hasAttribute('hidden')) {
-        e.preventDefault();
-        cerrarModal();
-      }
-    }
-    atraparFoco(e);
+  // cl-timer (§7): cuando el cronómetro server-authoritative llega a 0, mostrar
+  // el mismo mensaje/estado que usa el error "tiempo_agotado" que ya devuelve
+  // el servidor (§4.1). Ya no hay modal que cerrar.
+  onTiempoAgotado(() => {
+    manejarErrorEstado('tiempo_agotado');
   });
 }
 
@@ -962,7 +995,7 @@ export const verificarMaestro = verificarCodigoMaestro;
 
 // Auto-init si el DOM ya está listo y estamos en juego.html
 if (typeof document !== 'undefined') {
-  const enJuego = $('lista-estaciones') || $('modal-estacion') || $('sin-equipo');
+  const enJuego = $('nav-salas') || $('panel-estacion') || $('sin-equipo');
   if (enJuego) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {

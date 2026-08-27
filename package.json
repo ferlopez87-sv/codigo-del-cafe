@@ -1,0 +1,17 @@
+{
+  "name": "codigo-del-cafe",
+  "version": "1.0.0",
+  "description": "Misión: El código secreto del café — escape room CGC (Node/Express + PG, dual Docker/Render)",
+  "type": "module",
+  "scripts": {
+    "start": "node srv/index.js",
+    "dev": "node srv/index.js",
+    "migrar": "node srv/migrar.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "resend": "^4.0.0"
+  }
+}

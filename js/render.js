@@ -72,7 +72,12 @@ function _ordenUpdateAria(ol) {
 
 // Public: render --------------------------------------------------------
 export function renderInteraccion(contenedor, interaccion) {
-  if (!contenedor) throw new Error('renderInteraccion: contenedor requerido');
+  // Nunca lanzar hacia la interfaz (mismo espíritu que §14.5 para api.js): un
+  // contenedor ausente no debe romper la partida, solo no renderizar nada.
+  if (!contenedor) {
+    if (typeof console !== 'undefined') console.warn('renderInteraccion: contenedor requerido');
+    return;
+  }
   _estado.contenedor = contenedor;
   _estado.interaccion = interaccion || null;
   _estado.tipo = interaccion?.tipo || null;

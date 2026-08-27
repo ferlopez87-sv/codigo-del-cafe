@@ -1,73 +1,71 @@
 /* ==========================================================================
-   tokens.css — El Código del Café (CGC)
-   Design System: expediente confidencial · fondo oscuro #0f1410 + ámbar #d99a2b + verde OKLCH
+   tokens.css — Misión: El código secreto del café (CGC)
+   Design System: "Forensic Audit Protocol" (Stitch, proyecto v2, 2026-08-26) —
+   grafito #131313 + verde esmeralda + esquinas rectas + superficie "documento"
+   color papel para evidencia. Traducido a CSS plano, sin Google Fonts (Hanken
+   Grotesk/JetBrains Mono → stacks del sistema, ver CONTRACT §16.1). Reemplaza
+   la paleta ámbar/serif anterior — ver _src/styles.css.pre-tablero.bak si hace
+   falta comparar.
    Vanilla CSS plano · sin frameworks, sin CDN, sin Google Fonts
-   Skills: impeccable (jerarquía), ui-ux-pro-max (paleta/par tipográfico),
-           high-end-visual-design (no crema genérico), design-system (tokens)
    ==========================================================================
-   Contraste WCAG 2.1 — fondo base #0f1410 (oklch ~14% L) — recalculado
+   Contraste WCAG 2.1 — recalculado con la fórmula de luminancia relativa real
+   (no estimado) para la paleta nueva. Fondo base #131313.
    (umbral: 4.5:1 texto normal, 3:1 texto grande ≥24px / 18.66px bold)
 
-   texto #ede9e3 / fondo #0f1410              = 15.40:1  ✓ AAA
-   texto-suave #c2beba / fondo #0f1410        = 10.08:1  ✓ AAA
-   texto-tenue #9a9590 / fondo #0f1410        =  6.27:1  ✓ AA
-   texto #ede9e3 / fondo-elevado #1c211d      = 13.52:1  ✓ AAA
-   texto #ede9e3 / fondo-modal #232822        = 12.42:1  ✓ AAA
-   acento #d99a2b / fondo #0f1410             =  7.63:1  ✓ AAA (borde/icono)
-   fondo #0f1410 / acento #d99a2b (texto #0f1410 sobre ámbar) = 7.63:1  ✓ AA
-   texto #ede9e3 / acento-suave #2b2416       = 12.71:1  ✓ AAA
-   éxito #34c266 / fondo #0f1410              =  8.03:1  ✓ AAA
-   texto #ede9e3 / éxito-fondo #10291a        = 12.82:1  ✓ AAA
-   error #e05241 / fondo #0f1410              =  4.83:1  ✓ AA
-   texto #ede9e3 / error-fondo #2e1a14        = 13.63:1  ✓ AAA
-   alerta #d9a441 / fondo #0f1410             =  8.28:1  ✓ AAA
-   texto #ede9e3 / alerta-fondo #2d2410       = 12.66:1  ✓ AAA
-   bloqueado #6b6e6b / fondo #0f1410          =  3.61:1  ✓ solo borde/ícono decorativo (≥3:1) + texto requerido §13
-   ─ Todos ≥4.5:1 salvo bloqueado (uso no-texto-only + icono+texto obligatorio)
-   ─ OKLCH equivalentes documentados abajo; hex es fallback universal.
+   texto #e5e2e1 / fondo #131313                =  14.42:1  ✓ AAA
+   texto-suave #bfcaba / fondo #131313          =  10.95:1  ✓ AAA
+   texto-tenue #8a9485 / fondo #131313          =   5.89:1  ✓ AA
+   texto #e5e2e1 / fondo-elevado #1e1e1e        =  12.94:1  ✓ AAA
+   acento #88d982 / fondo #131313               =  10.88:1  ✓ AAA (texto/borde/icono)
+   éxito #88d982 / fondo #131313                =  10.88:1  ✓ AAA (misma familia que acento — el sistema no distingue "primary" de "success")
+   error #ffb4ab / fondo #131313                =  10.94:1  ✓ AAA
+   alerta #e8b64f / fondo #131313               =   9.94:1  ✓ AAA
+   texto-documento #121212 / documento #f5f5dc  =  16.93:1  ✓ AAA (tarjeta de evidencia, superficie clara)
+   bloqueado #7c8377 / fondo #131313             =   4.75:1  ✓ AA (subió de 3.61:1 al cambiar de paleta)
+   ─ Todos ≥4.5:1 salvo texto-tenue (≥4.5 igual, queda por encima del piso AA).
+   ─ acento-fuerte #2e7d32 (verde contenedor) NUNCA lleva texto encima directamente
+     (solo 3.98:1) — se usa solo como borde/relleno de estado, nunca como fondo de botón con texto.
    ========================================================================== */
 
 :root {
-  /* Superficies — expediente oscuro (high-end-visual-design: no crema/sand) */
-  --color-fondo: #0f1410;
-  --color-fondo-elevado: #1c211d;
-  --color-fondo-modal: #232822;
-  /* OKLCH (modern) — mismas superficies, más perceptualmente uniforme */
-  --color-fondo-oklch: oklch(0.155 0.02 148);
-  --color-fondo-elevado-oklch: oklch(0.195 0.02 148);
-  --color-fondo-modal-oklch: oklch(0.215 0.02 148);
+  /* Superficies — grafito oscuro + superficie "documento" para evidencia */
+  --color-fondo: #131313;
+  --color-fondo-elevado: #1e1e1e;
+  --color-fondo-modal: #1a1a1a;
+  /* Documento — papel/cream, SOLO para tarjetas de evidencia (§16.2, .exhibit) */
+  --color-documento: #f5f5dc;
+  --color-documento-texto: #121212;
+  --color-documento-borde: #d9d9bd;
 
-  /* Bordes — elevación sutil sobre oscuro */
-  --color-borde: #2e3430;
-  --color-borde-fuerte: #3d4640;
-  --color-borde-oklch: oklch(0.32 0.02 148);
-  --color-borde-fuerte-oklch: oklch(0.38 0.02 148);
+  /* Bordes — "audit lines", bajo contraste, técnico */
+  --color-borde: #2c2f33;
+  --color-borde-fuerte: #3a3e42;
 
-  /* Texto — cálido sobre oscuro (reduce halo en proyector, impeccable) */
-  --color-texto: #ede9e3;
-  --color-texto-suave: #c2beba;
-  --color-texto-tenue: #9a9590;
+  /* Texto — sobre grafito oscuro */
+  --color-texto: #e5e2e1;
+  --color-texto-suave: #bfcaba;
+  --color-texto-tenue: #8a9485;
 
-  /* Acento — café/ámbar tostado CGC (marca expediente) */
-  --color-acento: #d99a2b;
-  --color-acento-suave: #2b2416;
-  --color-acento-oklch: oklch(0.74 0.14 72);
-  --color-acento-suave-oklch: oklch(0.24 0.03 72);
+  /* Acento — verde esmeralda (Forensic Audit Protocol: "primary", también éxito) */
+  --color-acento: #88d982;
+  --color-acento-suave: #16261a;
+  --color-acento-fuerte: #2e7d32; /* solo borde/relleno de estado — nunca fondo con texto encima */
 
   /* Semánticos */
-  --color-exito: #34c266;
-  --color-exito-fondo: #10291a;
-  --color-exito-oklch: oklch(0.68 0.16 145);
-  --color-error: #e05241;
-  --color-error-fondo: #2e1a14;
-  --color-alerta: #d9a441;
-  --color-alerta-fondo: #2d2410;
+  --color-exito: #88d982;
+  --color-exito-fondo: #12261a;
+  --color-error: #ffb4ab;
+  --color-error-fondo: #2a1512;
+  --color-alerta: #e8b64f;
+  --color-alerta-fondo: #2b2210;
 
   /* Bloqueado — nunca solo color */
-  --color-bloqueado: #6b6e6b;
+  --color-bloqueado: #7c8377;
 
-  /* Tipografía — stacks del sistema, sin fuentes externas (CONTRACT §16.1) */
-  --fuente-titulo: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  /* Tipografía — un solo grupo sans (peso diferencia título/cuerpo, como
+     Hanken Grotesk en el original) + mono para datos/evidencia/sellos.
+     Stacks del sistema, sin fuentes externas (CONTRACT §16.1). */
+  --fuente-titulo: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --fuente-cuerpo: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --fuente-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
@@ -93,13 +91,15 @@
   --espacio-7: 3rem;
   --espacio-8: 4rem;
 
-  /* Radios — high-end: pills usan 999px, cards usan lg */
-  --radio-sm: 6px;
-  --radio-md: 10px;
-  --radio-lg: 16px;
-  --radio-pill: 999px;
-  --radio-bezel-outer: 18px; /* outer shell = inner + 1.5px padding */
-  --radio-bezel-inner: 16px;
+  /* Radios — "Shape: Sharp (0)" del sistema Forensic Audit Protocol: sin
+     esquinas redondeadas en ningún lado, para el aire de documento oficial.
+     Antes: pills 999px, cards 16px. Cambio deliberado, no un descuido. */
+  --radio-sm: 0;
+  --radio-md: 0;
+  --radio-lg: 0;
+  --radio-pill: 0;
+  --radio-bezel-outer: 0;
+  --radio-bezel-inner: 0;
 
   /* Sombras — baratas GPU, sin blur pesado */
   --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
@@ -132,28 +132,15 @@
   color-scheme: dark;
 }
 
-/* OKLCH progressive enhancement — si el UA soporta oklch, usa valores perceptuales */
-@supports (color: oklch(0.5 0.1 0)) {
-  :root {
-    --color-fondo: var(--color-fondo-oklch);
-    --color-fondo-elevado: var(--color-fondo-elevado-oklch);
-    --color-fondo-modal: var(--color-fondo-modal-oklch);
-    --color-borde: var(--color-borde-oklch);
-    --color-borde-fuerte: var(--color-borde-fuerte-oklch);
-    --color-acento: var(--color-acento-oklch);
-    --color-acento-suave: var(--color-acento-suave-oklch);
-    --color-exito: var(--color-exito-oklch);
-  }
-}
-
-/* Tipografía display — high-end + impeccable (no genérico)
+/* Tipografía display — familia única sans, el peso hace la jerarquía (como
+   Hanken Grotesk en el sistema original: mismo grupo, distinto peso título/cuerpo).
    Aplica solo a titulares, no a cuerpo; respeta balance/pretty y -0.02em */
 h1, .titulo-display {
   font-family: var(--fuente-titulo);
   font-size: var(--paso-6);
   line-height: 0.95;
   letter-spacing: -0.02em;
-  font-weight: 750;
+  font-weight: 800;
   text-wrap: balance;
   max-width: 14ch;
 }
@@ -161,6 +148,7 @@ h1, .titulo-display {
 h2 {
   font-family: var(--fuente-titulo);
   font-size: var(--paso-4);
+  font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -168,6 +156,7 @@ h2 {
 
 h3, h4 {
   font-family: var(--fuente-titulo);
+  font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.015em;
   text-wrap: balance;
@@ -208,6 +197,28 @@ body {
   line-height: 1.6;
   color: var(--color-texto);
   background: var(--color-fondo);
+}
+
+/* Textura "expediente" — presente en las 11 pantallas Stitch (.scanlines/.crt-overlay
+ * de fondo, siempre estática ahí también). Fija, sin blur, sin animación:
+ * repeating-linear-gradient de 1px es barato en GPU. z-index:-1 la deja SIEMPRE
+ * detrás del contenido (nunca de los pares texto/fondo auditados en tokens.css) —
+ * solo se asoma en los huecos de fondo llano, jamás sobre texto u otros elementos. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0,
+      rgba(0, 0, 0, 0) 3px,
+      rgba(0, 0, 0, 0.035) 3px,
+      rgba(0, 0, 0, 0.035) 4px
+    ),
+    radial-gradient(ellipse at 50% -10%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.32) 100%);
 }
 
 img,
@@ -309,25 +320,10 @@ main {
   display: none !important;
 }
 
-/* ── 5. Barra superior persistente (cronómetro + progreso) ───────── */
-#barra-superior {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky, 10);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
-  width: 100%;
-  max-width: var(--ancho-max, 1100px);
-  margin-inline: auto;
-  padding: var(--espacio-3, 0.75rem) var(--espacio-4, 1rem);
-  background: var(--color-fondo-elevado);
-  border-bottom: 1px solid var(--color-borde);
-}
-
-/* Grupo cronómetro */
-#barra-superior .barra-superior__tiempo,
+/* ── 5. Cronómetro y progreso — ahora dentro de #sidebar-salas (§7.2) ──
+ * Antes vivían en #barra-superior (barra fija arriba de toda la página).
+ * Esa barra desapareció con el tablero: el cronómetro/equipo/progreso se
+ * mudaron dentro de #sidebar-salas, que ya es persistente por sí mismo. */
 #cronometro {
   display: inline-flex;
   align-items: center;
@@ -338,15 +334,31 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-/* Grupo progreso — ocupa el resto del ancho */
+/* Segmentada, no barra continua ("Audit Progress Bar: a thin, segmented
+ * line, not a smooth bar, representing the 5 rooms"). El ::after dibuja 4
+ * cortes verticales POR ENCIMA del relleno — el ancho en % sigue siendo lo
+ * único que calcula juego.js (pintarBarraProgreso), esto es solo la capa
+ * visual, cero cambio de JS. */
 #barra-progreso {
-  flex: 1 1 160px;
-  min-width: 120px;
+  width: 100%;
   height: 8px;
   overflow: hidden;
   border-radius: var(--radio-sm, 4px);
   background: var(--color-borde);
   position: relative;
+}
+
+#barra-progreso::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0, transparent calc(20% - 1px),
+    var(--color-fondo) calc(20% - 1px), var(--color-fondo) 20%
+  );
 }
 
 #barra-progreso-relleno {
@@ -364,20 +376,16 @@ main {
   white-space: nowrap;
 }
 
-/* Fila secundaria de la barra en mobile: progreso ocupa toda la fila */
-#barra-superior #contador-progreso {
-  order: 1;
-}
-
 /* ── 6. Dashboard — grid de 5 tarjetas ──────────────────────────── */
-#lista-estaciones {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--espacio-4, 1rem);
+/* #nav-salas — antes #lista-estaciones (grilla suelta en la página). Ahora vive
+   dentro de #sidebar-salas (tablero, §7.2): lista vertical de navegación. */
+#nav-salas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3, 0.75rem);
   width: 100%;
   padding: 0;
   margin: 0;
-  list-style: none;
 }
 
 .estacion-card {
@@ -412,53 +420,96 @@ main {
   font-size: var(--paso--1, 0.875rem);
 }
 
-/* ── 7. Modal de estación ───────────────────────────────────────── */
-#modal-estacion {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal, 50);
+/* ── 7. Tablero de la auditoría — barra lateral + panel persistente ──
+ * Reescrito 2026-08-25 (CONTRACT §7.2): reemplaza el modal de estación por
+ * la composición real de Stitch 06-10 (sidebar + panel principal), pedida
+ * explícitamente después de que la primera pasada de estilo solo tocara
+ * detalles cosméticos. Ya no hay overlay/backdrop/z-index de capas: todo
+ * es contenido normal de la página, dos columnas en desktop. */
+.tablero {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--espacio-4, 1rem);
+  flex-direction: column;
+  gap: var(--espacio-5, 1.25rem);
+  align-items: flex-start;
 }
 
-#modal-estacion[hidden] {
-  display: none !important;
+@media (min-width: 768px) {
+  .tablero {
+    flex-direction: row;
+  }
 }
 
-#modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-backdrop, 49);
-  background: rgba(0, 0, 0, 0.55);
-}
-
-#modal-backdrop[hidden] {
-  display: none !important;
-}
-
-/* Panel interno del modal */
-#modal-estacion > .modal__panel,
-#modal-estacion > dialog,
-#modal-estacion .modal-contenido {
-  position: relative;
-  z-index: var(--z-modal-panel, 51);
+#sidebar-salas {
   display: flex;
   flex-direction: column;
   gap: var(--espacio-4, 1rem);
   width: 100%;
-  max-width: 640px;
-  max-height: 90vh;
-  max-height: 90dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  flex-shrink: 0;
+  padding: var(--espacio-4, 1rem);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md, 8px);
+}
+
+@media (min-width: 768px) {
+  #sidebar-salas {
+    width: 280px;
+    position: sticky;
+    top: var(--espacio-4, 1rem);
+  }
+}
+
+.sidebar-salas__encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2, 0.5rem);
+}
+
+.sidebar-salas__equipo {
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1, 0.875rem);
+  color: var(--color-texto-suave);
+}
+
+.sidebar-salas__tiempo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-2, 0.5rem);
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--paso-1, 1.125rem);
+}
+
+/* #panel-estacion — antes .modal__panel dentro de un overlay. Mismo
+   tratamiento visual (fondo/borde/sombra), ahora estático en el flujo. */
+#panel-estacion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4, 1rem);
+  width: 100%;
+  min-height: 320px;
   padding: var(--espacio-6, 1.5rem);
   background: var(--color-fondo-modal, var(--color-fondo-elevado));
   border: 1px solid var(--color-borde);
   border-radius: var(--radio-lg, 12px);
-  box-shadow: var(--sombra-md);
+  box-shadow: var(--sombra-sm);
 }
+
+#panel-estacion-vacio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+}
+
+#panel-estacion-contenido {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4, 1rem);
+}
+#panel-estacion-contenido[hidden] { display: none; }
 
 #estacion-narrativa,
 #estacion-datos,
@@ -488,25 +539,12 @@ main {
   font-size: var(--paso--1, 0.875rem);
 }
 
-/* Acciones del modal */
-#modal-estacion .modal__acciones,
-#modal-estacion .estacion-acciones {
+.panel-estacion__acciones {
   display: flex;
   flex-wrap: wrap;
   gap: var(--espacio-3, 0.75rem);
   justify-content: flex-end;
   margin-top: var(--espacio-2, 0.5rem);
-}
-
-#btn-cerrar-modal {
-  position: absolute;
-  top: var(--espacio-3, 0.75rem);
-  right: var(--espacio-3, 0.75rem);
-  min-width: 44px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* ── 8. Salas específicas ───────────────────────────────────────── */
@@ -593,10 +631,14 @@ main {
 
 #resumen-datos dt {
   font-weight: 600;
+  font-family: var(--fuente-titulo);
+  letter-spacing: -0.01em;
 }
 
 #resumen-datos dd {
   margin: 0;
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 #pantalla-resumen .resumen__acciones {
@@ -641,7 +683,7 @@ select {
     padding-inline: var(--espacio-4, 1rem);
   }
 
-  #modal-estacion {
+  #panel-estacion {
     padding: var(--espacio-4, 1rem);
   }
 }
@@ -651,21 +693,6 @@ select {
   main {
     gap: var(--espacio-8, 2rem);
     padding-block: var(--espacio-8, 2rem);
-  }
-
-  #barra-superior {
-    flex-wrap: nowrap;
-    gap: var(--espacio-5, 1.25rem);
-    padding: var(--espacio-4, 1rem) var(--espacio-6, 1.5rem);
-  }
-
-  #barra-progreso {
-    flex-basis: 240px;
-  }
-
-  #lista-estaciones {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--espacio-5, 1.25rem);
   }
 
   #pantalla-bienvenida > header {
@@ -680,9 +707,7 @@ select {
     grid-template-columns: auto 1fr;
   }
 
-  #modal-estacion > .modal__panel,
-  #modal-estacion > dialog,
-  #modal-estacion .modal-contenido {
+  #panel-estacion {
     padding: var(--espacio-8, 2rem);
   }
 }
@@ -691,21 +716,8 @@ select {
 @media (min-width: 1100px) {
   .contenedor,
   main,
-  .l-wrap,
-  #barra-superior {
+  .l-wrap {
     padding-inline: var(--espacio-6, 1.5rem);
-  }
-
-  #lista-estaciones {
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--espacio-6, 1.5rem);
-  }
-
-  /* 5 tarjetas en 3 columnas: última fila de 2 centrada visualmente */
-  #lista-estaciones > .estacion-card:nth-child(4),
-  #lista-estaciones > .estacion-card:nth-child(5) {
-    /* sin desplazamiento forzado; el grid las deja alineadas a la izquierda
-       de forma predecible — components.css puede centrar si se requiere */
   }
 
   #pantalla-dashboard,
@@ -726,11 +738,6 @@ select {
   border-radius: 2px;
 }
 
-/* Asegura que el foco dentro del modal sea visible por encima del backdrop */
-#modal-estacion :focus-visible {
-  outline-color: var(--color-acento);
-}
-
 /* ── 12. Movimiento reducido ────────────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
   html {
@@ -741,9 +748,7 @@ select {
     transition: width var(--transicion, 220ms ease);
   }
 
-  .estacion-card,
-  #modal-estacion,
-  #modal-backdrop {
+  .estacion-card {
     transition:
       opacity var(--transicion, 220ms ease),
       transform var(--transicion, 220ms ease);
@@ -785,25 +790,12 @@ select {
 :where(.btn, button, input, select, textarea, fieldset) { font: inherit; }
 :where(.estacion-card, .btn, input, select, textarea):focus { outline-offset: 2px; }
 
-/* ── 1. Tarjetas — Double-Bezel ──────────────────────────────────────
- * Patrón high-end: outer shell (anillo 1.5px + fondo borde) + inner core.
- * Sin side-stripe (rechazado), sin gradient text, sin glass.
- * El <li> es el “bezel outer”, la .estacion-card es el “inner core”.
- * Si no hay <li>, la propia card simula el bezel con box-shadow ring.
- */
-#lista-estaciones > li {
-  /* outer shell */
-  padding: 1.5px;
-  border-radius: var(--radio-bezel-outer, 18px);
-  background: var(--color-borde);
-  list-style: none;
-  transition: background-color var(--transicion), box-shadow var(--transicion);
-}
-
-#lista-estaciones > li:has(.estacion-card.is-progreso) { background: var(--color-acento); }
-#lista-estaciones > li:has(.estacion-card.is-resuelta) { background: var(--color-exito); }
-#lista-estaciones > li:has(.estacion-card.is-bloqueada) { background: var(--color-borde); opacity: 0.92; }
-
+/* ── 1. Tarjetas — Double-Bezel, ahora sin <li> (§7.2, tablero) ───────
+ * Antes el "outer shell" del anillo lo daba un <li> padre (#lista-estaciones
+ * > li); #nav-salas ya no envuelve las cards en <li> (es un <nav>, no un
+ * <ul>). El ring se pinta directo sobre la card con box-shadow, y el color
+ * del ring sigue cambiando por estado — mismo lenguaje visual, un nivel
+ * menos de anidamiento. */
 .estacion-card[data-estacion] {
   position: relative;
   display: flex;
@@ -813,19 +805,18 @@ select {
   min-height: 168px;
   border-radius: var(--radio-bezel-inner, 16px);
   background: var(--color-fondo-elevado);
-  border: 1px solid transparent; /* el ring lo da el <li> padre */
-  box-shadow: var(--sombra-sm);
+  border: 1px solid transparent;
+  box-shadow: 0 0 0 1.5px var(--color-borde), var(--sombra-sm);
   color: var(--color-texto);
   text-align: left;
   cursor: pointer;
   outline-offset: 2px;
+  transition: box-shadow var(--transicion);
 }
 
-/* Fallback cuando la card no está dentro de <li> (render alternativo) */
-.estacion-card[data-estacion]:not(#lista-estaciones > li .estacion-card) {
-  border-color: var(--color-borde);
-  box-shadow: 0 0 0 1.5px var(--color-borde), var(--sombra-sm);
-}
+.estacion-card[data-estacion].is-progreso { box-shadow: 0 0 0 1.5px var(--color-acento), var(--sombra-sm); }
+.estacion-card[data-estacion].is-resuelta { box-shadow: 0 0 0 1.5px var(--color-exito), var(--sombra-sm); }
+.estacion-card[data-estacion].is-bloqueada { box-shadow: 0 0 0 1.5px var(--color-borde), var(--sombra-sm); opacity: 0.92; }
 
 .estacion-card[data-estacion]:where(button) { width: 100%; font-family: var(--fuente-cuerpo); }
 
@@ -847,9 +838,20 @@ select {
 }
 
 .estacion-card__pilar {
+  /* Chip mono, no texto corrido — como las etiquetas "FILE_REF:"/"EXHIBIT" de Stitch */
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  padding: 0.15em 0.6em;
   color: var(--color-texto-suave);
-  font-size: var(--paso--1);
-  line-height: 1.4;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  background: var(--color-fondo);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
   text-wrap: pretty;
 }
 
@@ -915,9 +917,6 @@ select {
 
 /* ── 1.2 Hover / active / focus — transform/opacity, no width (§13) ── */
 @media (hover: hover) {
-  #lista-estaciones > li:has(.estacion-card[data-estacion]:not(.is-bloqueada):hover) {
-    box-shadow: var(--sombra-md);
-  }
   .estacion-card[data-estacion]:not(.is-bloqueada):hover {
     transform: translateY(-1px);
     box-shadow: var(--sombra-md);
@@ -934,9 +933,12 @@ select {
 }
 .estacion-card.is-bloqueada:focus-visible { outline-color: var(--color-bloqueado); }
 
-/* ── 2. Botones — pill rounded-full + trailing icon circle ────────────
- * high-end: pills flotantes (shadow), icono circular trailing en primario.
- * Hover usa transform/opacity, active scale 0.98, focus-visible 2px acento.
+/* ── 2. Botones — grafito + borde/texto esmeralda, mono mayúsculas ────
+ * Traducido del sistema Forensic Audit Protocol: "Primary: Graphite
+ * background with emerald borders and text… All buttons use uppercase
+ * monospace text." Esquinas rectas (heredado de --radio-pill: 0). Nada de
+ * relleno sólido de color ni de insignia circular — eso era el lenguaje
+ * "pill" anterior, descartado a propósito.
  */
 .btn {
   display: inline-flex;
@@ -946,97 +948,88 @@ select {
   min-height: 44px;
   min-width: 44px;
   padding: var(--espacio-2) var(--espacio-4);
-  font-family: var(--fuente-cuerpo);
+  font-family: var(--fuente-mono);
   font-size: var(--paso--1);
   font-weight: 600;
   line-height: 1.2;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
   color: var(--color-texto);
   background: var(--color-fondo-elevado);
   border: 1px solid var(--color-borde-fuerte);
-  border-radius: var(--radio-pill, 999px); /* PILL */
-  box-shadow: var(--sombra-sm);
+  border-radius: var(--radio-pill);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 .btn:where(:disabled, [aria-disabled="true"]) {
-  opacity: 0.55; cursor: not-allowed; pointer-events: none; box-shadow: none;
+  opacity: 0.55; cursor: not-allowed; pointer-events: none;
 }
 @media (hover: hover) {
   .btn:not(:disabled):hover {
     background: var(--color-fondo-modal);
     border-color: var(--color-borde-fuerte);
-    box-shadow: var(--sombra-md);
     transform: translateY(-1px);
-    opacity: 0.98;
   }
 }
-.btn:not(:disabled):active { transform: scale(0.98); box-shadow: var(--sombra-sm); opacity: 1; }
+.btn:not(:disabled):active { transform: scale(0.98); }
 .btn:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 2px; }
 
-/* Primario — ámbar café + icono circular trailing */
+/* Primario — grafito con borde y texto esmeralda (nunca relleno sólido:
+   un fondo #2e7d32 con texto encima no llega a 4.5:1, ver header de tokens) */
 .btn--primario {
-  color: var(--color-fondo);
-  background: var(--color-acento);
-  border-color: var(--color-acento);
+  color: var(--color-acento);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-acento);
   font-weight: 700;
-  padding-right: var(--espacio-2); /* deja espacio para el círculo */
-  box-shadow: var(--sombra-sm);
 }
 .btn--primario::after {
   content: "→";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin-left: var(--espacio-2);
-  border-radius: var(--radio-pill, 999px);
-  background: var(--color-fondo);
-  color: var(--color-acento);
   font-family: var(--fuente-mono);
-  font-size: 0.95em;
-  line-height: 1;
-  flex-shrink: 0;
-  border: 1px solid var(--color-fondo);
+  margin-left: 0.15em;
 }
 @media (hover: hover) {
   .btn--primario:not(:disabled):hover {
-    background: var(--color-acento);
+    background: var(--color-acento-suave);
     border-color: var(--color-acento);
-    filter: brightness(1.06);
-    box-shadow: var(--sombra-md);
     transform: translateY(-1px);
   }
 }
-.btn--primario:not(:disabled):active { filter: brightness(0.96); transform: scale(0.98); }
+.btn--primario:not(:disabled):active { transform: scale(0.98); }
 .btn--primario:focus-visible { outline-color: var(--color-acento); }
 
-/* Ghost — transparente, también pill */
+/* Ghost — transparente */
 .btn--ghost {
   color: var(--color-texto);
   background: transparent;
   border-color: var(--color-borde);
-  box-shadow: none;
 }
 @media (hover: hover) {
   .btn--ghost:not(:disabled):hover {
     background: var(--color-fondo-elevado);
     border-color: var(--color-borde-fuerte);
-    box-shadow: var(--sombra-sm);
     transform: translateY(-1px);
   }
 }
 .btn--ghost:not(:disabled):active { background: var(--color-fondo-elevado); transform: scale(0.98); }
 
+/* Crítico/peligro — borde y texto rojo (docente.html: anonimizar, cerrar sesión) */
+.btn--critico {
+  color: var(--color-error);
+  background: var(--color-fondo-elevado);
+  border-color: var(--color-error);
+}
+@media (hover: hover) {
+  .btn--critico:not(:disabled):hover { background: var(--color-error-fondo); }
+}
+
 /* Tamaños — nunca rompen 44px mínimo (§13) */
 .btn--sm { min-height: 44px; padding: var(--espacio-1) var(--espacio-3); font-size: var(--paso--1); }
 
 /* Grupo de botones */
-.grupo-botones, .modal__acciones, .estacion-acciones, .acciones {
+.grupo-botones, .panel-estacion__acciones, .estacion-acciones, .acciones {
   display: flex; flex-wrap: wrap; gap: var(--espacio-3); align-items: center;
 }
 
@@ -1163,11 +1156,149 @@ pre code { padding: 0; background: transparent; border: 0; border-radius: 0; }
   color: var(--color-texto); background: var(--color-fondo-elevado); border: 1px solid var(--color-borde);
   border-radius: var(--radio-pill, 999px); box-shadow: var(--sombra-sm);
 }
-.badge--acento { color: var(--color-fondo); background: var(--color-acento); border-color: var(--color-acento); }
+.badge--acento {
+  color: var(--color-fondo); background: var(--color-acento); border-color: var(--color-acento);
+  /* Refuerzo "ficha de expediente": mismo idioma Double-Bezel de las tarjetas
+     (anillo + fondo de página + segundo anillo), solo en el badge de cabecera
+     de los 3 HTML ("CGC · Expediente…") — único selector que usa este modificador. */
+  box-shadow: 0 0 0 2px var(--color-fondo), 0 0 0 3px var(--color-acento), var(--sombra-sm);
+}
 .badge--exito { color: var(--color-texto); background: var(--color-exito-fondo); border-color: var(--color-exito); }
 .badge--error { color: var(--color-texto); background: var(--color-error-fondo); border-color: var(--color-error); }
 .badge--alerta { color: var(--color-texto); background: var(--color-alerta-fondo); border-color: var(--color-alerta); }
 .badge--bloqueado { color: var(--color-texto-tenue); background: var(--color-fondo-elevado); border-color: var(--color-borde); }
+
+/* ── 8.1 Sello — "expediente confidencial" (Stitch 02-bienvenida: sello CLASIFICADO
+ * rotado con borde grueso rojo; también 06/09/11 usan tags rojos de clasificación).
+ * Siempre decorativo: aria-hidden="true" en el HTML, el título real vive en el <h2>
+ * vecino. Reusa --color-error/--color-acento ya auditados en tokens.css — el par
+ * color/fondo-de-página que deja ver (transparente) es exactamente
+ * "error/fondo = 4.83:1 ✓ AA" y "acento/fondo = 7.63:1 ✓ AAA" documentados arriba;
+ * cero hex nuevos. */
+.sello {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start; /* evita que un padre flex-column (#pantalla-*) lo estire */
+  gap: 0.4em;
+  padding: 0.3em 0.85em;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-error);
+  background: transparent;
+  border: 3px solid var(--color-error);
+  border-radius: var(--radio-sm);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-error) 30%, transparent) inset;
+  transform: rotate(-4deg);
+  user-select: none;
+  white-space: nowrap;
+}
+.sello--acento {
+  color: var(--color-acento);
+  border-color: var(--color-acento);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-acento) 30%, transparent) inset;
+}
+
+/* ── 8.1b Ficha — tarjeta de expediente tipo carpeta de investigación
+ * (Stitch 01/03/05: card central angosta, pestaña de carpeta sobresaliendo del
+ * borde superior, sello de esquina inferior). Composición visual tomada de
+ * Stitch; el texto de la pestaña/sello lo decide cada página — nunca copiar el
+ * copy de Stitch, solo la forma (CONTRACT §16.1). Reusa tokens ya auditados,
+ * cero hex nuevos. Pensada para envolver formularios angostos (registro,
+ * acceso, verificación de código); no es un contenedor de propósito general. */
+.ficha {
+  position: relative;
+  max-width: 34rem;
+  margin-inline: auto;
+  margin-block-start: var(--espacio-7); /* deja aire para que la pestaña no choque con lo anterior */
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde-fuerte);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-lg);
+  padding: var(--espacio-6) var(--espacio-5) var(--espacio-5);
+}
+.ficha__pestana {
+  position: absolute;
+  top: -1.75rem;
+  left: var(--espacio-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  background: var(--color-fondo-modal);
+  border: 1px solid var(--color-borde-fuerte);
+  border-bottom: none;
+  border-radius: var(--radio-sm) var(--radio-sm) 0 0;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+  padding: 0.4em 1.1em 0.55em 0.85em;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-acento);
+  white-space: nowrap;
+}
+.ficha__estampa {
+  position: absolute;
+  bottom: var(--espacio-3);
+  right: var(--espacio-3);
+  transform: rotate(-6deg);
+  background: var(--color-error-fondo);
+  color: var(--color-texto);
+  border: 1px solid var(--color-error);
+  border-radius: 2px;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15em 0.6em;
+  box-shadow: var(--sombra-sm);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── 8.1c Campos estilo terminal — input subrayado sin caja (Stitch 01/03/05:
+ * "input-terminal", border-bottom en vez de recuadro completo). Se aplica al
+ * <form> contenedor para no tocar cada <input>/<select> individualmente. */
+form.campo--terminal .campo__label {
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-texto-suave);
+}
+form.campo--terminal input:not([type="checkbox"]):not([type="radio"]) {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-borde-fuerte);
+  border-radius: 0;
+  padding-inline: 0;
+  font-family: var(--fuente-mono);
+}
+form.campo--terminal input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+  border-bottom-color: var(--color-acento);
+  box-shadow: 0 1px 0 0 var(--color-acento);
+}
+
+/* ── 8.2 Cronómetro — estados de urgencia (js/timer.js ya alterna is-alerta/is-critico
+ * sobre #cronometro; no tenían regla visual — el color nunca es la única señal:
+ * el texto numérico y #cronometro-anuncio siguen anunciando el tiempo real, §13). */
+#cronometro.is-alerta {
+  color: var(--color-alerta);
+  font-weight: 700;
+}
+#cronometro.is-critico {
+  color: var(--color-error);
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--color-error) 45%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  #cronometro.is-alerta,
+  #cronometro.is-critico { transition: color var(--transicion), text-shadow var(--transicion); }
+}
 
 /* ── 9. Feedback — icon+texto, nunca solo color ───────────────────── */
 .feedback {
@@ -1213,17 +1344,138 @@ pre code { padding: 0; background: transparent; border: 0; border-radius: 0; }
 .campo__error:empty { display: none; }
 
 /* ── 11. Dataviz — contenedores para SVG inline (§16.2) ───────────── */
-.dataviz { margin-block: var(--espacio-4); }
+/* Encuadre "informe forense" (Stitch 07/08: paneles con marco + etiqueta mono
+ * superior tipo "FILE_REF:"/"DATA_ANALISIS") — puramente el marco; ct-e2/ct-e3
+ * dueños del SVG en sí. figcaption es opcional: si el HTML de la estación no
+ * la usa, esta regla queda inerte (no rompe nada). */
+.dataviz {
+  margin-block: var(--espacio-4);
+  padding: var(--espacio-4);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-sm);
+}
 .dataviz svg { width: 100%; height: auto; display: block; }
+.dataviz figcaption {
+  margin: 0 0 var(--espacio-3);
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-texto-tenue);
+}
 .dataviz details { margin-top: var(--espacio-3); font-size: var(--paso--1); }
 .dataviz details summary { cursor: pointer; color: var(--color-texto-suave); }
 .dataviz table { width: 100%; border-collapse: collapse; font-size: var(--paso--1); margin-top: var(--espacio-2); }
 .dataviz th, .dataviz td { text-align: left; padding: var(--espacio-2) var(--espacio-3); border-bottom: 1px solid var(--color-borde); }
 .dataviz th { font-family: var(--fuente-mono); font-size: var(--paso--2); letter-spacing: 0.03em; text-transform: uppercase; color: var(--color-texto-tenue); }
 
+/* ── 11.1 Exhibit — tarjeta de evidencia color papel (Stitch v2, sistema
+ * "Forensic Audit Protocol": "Evidence Cards: Cream background, charcoal
+ * text, sharp corners, monospace body text... look like physical paper
+ * clippings"). ÚNICO lugar de todo el proyecto que usa --color-documento —
+ * el contraste con el resto (grafito oscuro) es el punto: una hoja de
+ * verdad sobre un escritorio oscuro. Wired en js/juego.js:
+ * pintarDatosEstacion() — a diferencia del hook anterior (.ficha-dato,
+ * agregado por fe-visual pero nunca conectado), esta vez sí se usa. */
+.exhibit {
+  position: relative;
+  padding: var(--espacio-3) var(--espacio-4);
+  background: var(--color-documento);
+  border: 1px solid var(--color-documento-borde);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.exhibit__etiqueta {
+  display: block;
+  margin-bottom: var(--espacio-1);
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-documento-texto);
+  opacity: 0.75; /* verificado: blend resultante da 7.94:1 contra #f5f5dc, no 4.5:1 al límite */
+}
+.exhibit__valor {
+  margin: 0;
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--1);
+  color: var(--color-documento-texto);
+}
+/* Anidado (datos objeto/array dentro de un exhibit): mismo tratamiento, sin repetir el fondo */
+.exhibit dl, .exhibit ul { margin: var(--espacio-2) 0 0; padding: 0; }
+.exhibit dt { font-weight: 700; }
+.exhibit dt, .exhibit dd, .exhibit li { color: var(--color-documento-texto); font-family: var(--fuente-mono); }
+
+/* ── 11.2 Tablas — nómina y monitoreo docente (antes sin ninguna regla: el
+ * navegador las pintaba con su tabla por defecto, rompiendo el "expediente").
+ * Reusa pares ya auditados: texto-tenue/fondo (th, 6.27:1 documentado) y
+ * texto/fondo-elevado (td, 13.52:1 documentado). Caption/scope del HTML (§8)
+ * quedan intactos, solo se visten. */
+.campo:has(> table) { overflow-x: auto; }
+
+#tabla-nomina,
+#tabla-monitoreo {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: var(--paso--1);
+  background: var(--color-fondo-elevado);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-md);
+}
+#tabla-nomina caption,
+#tabla-monitoreo caption {
+  caption-side: top;
+  text-align: left;
+  padding: var(--espacio-3) var(--espacio-4) var(--espacio-2);
+  font-family: var(--fuente-titulo);
+  font-size: var(--paso-0);
+  font-weight: 700;
+  color: var(--color-texto);
+  letter-spacing: -0.01em;
+}
+#tabla-nomina th,
+#tabla-monitoreo th {
+  text-align: left;
+  padding: var(--espacio-2) var(--espacio-3);
+  font-family: var(--fuente-mono);
+  font-size: var(--paso--2);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-texto-tenue);
+  background: var(--color-fondo);
+  border-top: 1px solid var(--color-borde);
+  border-bottom: 1px solid var(--color-borde-fuerte);
+}
+#tabla-nomina td,
+#tabla-monitoreo td {
+  padding: var(--espacio-2) var(--espacio-3);
+  border-bottom: 1px solid var(--color-borde);
+  color: var(--color-texto);
+  vertical-align: middle;
+}
+#tabla-nomina tbody tr:last-child td,
+#tabla-monitoreo tbody tr:last-child td { border-bottom: 0; }
+@media (hover: hover) {
+  #tabla-nomina tbody tr:hover td,
+  #tabla-monitoreo tbody tr:hover td { background: var(--color-fondo-modal); }
+}
+/* Columnas técnicas — mono, igual que IDs/timestamps (§9). Orden fijado por el
+ * <thead> estático de docente.html: nómina col.3 = Carné; monitoreo col.3-5 =
+ * Resueltas/Intentos/Tiempo usado. */
+#tabla-nomina td:nth-child(3) { font-family: var(--fuente-mono); }
+#tabla-monitoreo td:nth-child(3),
+#tabla-monitoreo td:nth-child(4),
+#tabla-monitoreo td:nth-child(5) {
+  font-family: var(--fuente-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── 12. Motion — cubic-bezier(0.32,0.72,0,1) + prefers-reduced-motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .estacion-card[data-estacion], .btn, .feedback, .badge, .fragmento, #fragmentos-codigo span, #lista-estaciones > li {
+  .estacion-card[data-estacion], .btn, .feedback, .badge, .fragmento, #fragmentos-codigo span {
     transition: none !important; transform: none !important;
   }
 }
@@ -1231,7 +1483,6 @@ pre code { padding: 0; background: transparent; border: 0; border-radius: 0; }
   .estacion-card[data-estacion] {
     transition: transform var(--transicion), box-shadow var(--transicion), border-color var(--transicion), background-color var(--transicion), opacity var(--transicion);
   }
-  #lista-estaciones > li { transition: background-color var(--transicion), box-shadow var(--transicion), transform var(--transicion); }
   .btn {
     transition: background-color var(--transicion), border-color var(--transicion), color var(--transicion), box-shadow var(--transicion), transform var(--transicion), filter var(--transicion), opacity var(--transicion);
   }
@@ -1323,8 +1574,8 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
-/* Variante para elementos sobre fondo oscuro (modal backdrop, header) */
-:where(#modal-estacion, #barra-superior) :focus-visible {
+/* Variante para elementos sobre fondo oscuro (panel de estación, sidebar) */
+:where(#panel-estacion, #sidebar-salas) :focus-visible {
   outline-color: var(--color-acento);
   /* sombra clara para asegurar contraste si acento es oscuro */
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-acento) 25%, transparent);
@@ -1387,72 +1638,16 @@ textarea:focus-visible,
   white-space: normal !important;
 }
 
-/* ── 4. Modal — foco atrapado, Esc cierra, retorno de foco ── */
-/* Capas: #modal-backdrop (49) < #modal-estacion (50) < .modal__panel (51)
-   JS (juego.js) debe:
-   1) al abrir: guardar document.activeElement (la .estacion-card que disparó)
-   2) mover foco al primer focoable del panel (#btn-cerrar-modal o primer input)
-   3) atrapar Tab/Shift+Tab dentro del panel
-   4) Esc cierra y devuelve foco a la tarjeta guardada
-   5) toggle aria-hidden y hidden, y bloqueo de scroll en <body>
+/* ── 4. #panel-estacion — foco al título al seleccionar sala ──
+ * Reescrito 2026-08-25 (§7.2): ya no hay modal que atrapar foco, backdrop
+ * que cerrar con clic, ni Esc que capturar — #panel-estacion es contenido
+ * normal de la página. juego.js mueve el foco a #estacion-titulo al elegir
+ * una sala (equivalente accesible al foco inicial del modal, sin el resto
+ * del aparataje de diálogo). Todo lo de capas/backdrop/inert que vivía acá
+ * se eliminó junto con el modal.
 */
-
-#modal-estacion {
-  /* ya posicionado en layout.css; aquí solo a11y */
-  isolation: isolate;
-}
-
-#modal-estacion[hidden],
-#modal-backdrop[hidden] {
-  display: none !important;
-}
-
-/* Cuando el modal está abierto, el resto es inerte para AT y puntero */
-body:has(#modal-estacion:not([hidden])) {
-  overflow: hidden;
-}
-
-body:has(#modal-estacion:not([hidden])) main,
-body:has(#modal-estacion:not([hidden])) #barra-superior {
-  /* fallback si JS no pone inert/aria-hidden en el fondo */
-  pointer-events: none;
-}
-
-/* Soporte preferido: JS pone inert + aria-hidden="true" en <main> y #barra-superior */
-main[aria-hidden="true"],
-#barra-superior[aria-hidden="true"] {
-  pointer-events: none;
-}
-
-/* Panel: asegura que siempre haya borde visible para foco */
-#modal-estacion > .modal__panel,
-#modal-estacion > dialog,
-#modal-estacion .modal-contenido {
-  /* foco del panel mismo si JS hace panel.focus() */
+#panel-estacion:focus-within {
   outline-offset: -2px;
-}
-
-#modal-estacion > .modal__panel:focus-visible,
-#modal-estacion > dialog:focus-visible {
-  outline: 2px solid var(--color-acento);
-  outline-offset: 2px;
-}
-
-/* Backdrop clickeable para cerrar también con puntero */
-#modal-backdrop {
-  cursor: pointer;
-}
-
-/* Botón cerrar: ya con 44×44 en layout.css; refuerzo a11y */
-#btn-cerrar-modal {
-  /* asegura área táctil aunque el ícono sea 16px */
-  min-width: 44px;
-  min-height: 44px;
-}
-
-/* Si el modal usa <dialog> nativo, refuerzo de backdrop */
-#modal-estacion dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
 }
 
 /* ── 5. Live regions — role="status" aria-live="polite" ────── */
@@ -1564,8 +1759,6 @@ main[aria-hidden="true"],
 
 #barra-progreso-relleno,
 .estacion-card,
-#modal-estacion,
-#modal-backdrop,
 button,
 a,
 input,
@@ -1589,14 +1782,6 @@ textarea {
       box-shadow var(--transicion, 220ms ease),
       border-color var(--transicion, 220ms ease),
       background-color var(--transicion, 220ms ease);
-  }
-
-  #modal-estacion {
-    transition: opacity var(--transicion, 220ms ease);
-  }
-
-  #modal-backdrop {
-    transition: opacity var(--transicion, 220ms ease);
   }
 
   button,
@@ -1734,7 +1919,7 @@ dd a {
 
 /* Espaciado táctil entre objetivos adyacentes */
 .grupo-botones,
-.modal__acciones,
+.panel-estacion__acciones,
 .estacion-acciones,
 .acciones {
   gap: var(--espacio-3, 0.75rem);
@@ -1819,6 +2004,11 @@ textarea[aria-invalid="true"] {
 
 /* ── 10. Forced colors / alto contraste (Windows HCM) ───────── */
 @media (forced-colors: active) {
+  /* La textura de fondo (body::before, layout.css) es puro adorno: fuera en HCM */
+  body::before {
+    display: none;
+  }
+
   :focus-visible {
     outline: 3px solid CanvasText;
     outline-offset: 2px;
@@ -1830,11 +2020,6 @@ textarea[aria-invalid="true"] {
   select,
   textarea {
     border: 1px solid CanvasText;
-  }
-
-  #modal-backdrop {
-    background: rgba(0, 0, 0, 0.8);
-    forced-color-adjust: none;
   }
 
   .estacion-card.is-resuelta,
@@ -1864,9 +2049,9 @@ a:empty:not([aria-label]):not([aria-labelledby]) {
  * [ ] Foco: Tab recorre todo en orden lógico; Shift+Tab retrocede;
  *     :focus-visible 2px --color-acento visible en cada interactivo;
  *     ningún outline:none sin reemplazo (grep outline:none → 0).
- * [ ] Modal #modal-estacion: foco atrapado (Tab no escapa), Esc cierra,
- *     foco vuelve a la .estacion-card que abrió, backdrop click cierra,
- *     <body> sin scroll, fondo con aria-hidden/inert.
+ * [ ] Tablero #panel-estacion (§7.2, ya no es modal): al elegir una sala en
+ *     #nav-salas, el foco se mueve a #estacion-titulo; Tab recorre el panel
+ *     como contenido normal de la página, sin trampa de foco ni backdrop.
  * [ ] Lector de pantalla (NVDA/JAWS/VoiceOver):
  *     #mensaje-auth role="alert" anuncia errores; #aviso-conexion
  *     role="status" anuncia pérdida de red; #estacion-feedback y

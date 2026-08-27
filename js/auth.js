@@ -16,17 +16,17 @@ function mostrarVista(id){
     if(v===id){
       el.removeAttribute('hidden');
       el.classList.remove('is-oculta');
+      el.classList.add('active');
       el.setAttribute('aria-hidden','false');
-      // focus para screen reader
       const h2=el.querySelector('h2');
       if(h2) h2.focus({preventScroll:true});
     } else {
       el.setAttribute('hidden','');
       el.classList.add('is-oculta');
+      el.classList.remove('active');
       el.setAttribute('aria-hidden','true');
     }
   });
-  // actualizar hash sin scroll brusco
   if(location.hash!==`#${id}`) history.replaceState(null,'',`#${id}`);
 }
 
@@ -48,6 +48,15 @@ function setCampoError(idError, msg){
 
 function validarEmail(c){
   return c && c.includes('@') && c.includes('.') && c.length>=5;
+}
+
+// 2026-08-26: docentes terminaban en juego.html (pantalla de estudiante,
+// "tu docente aún no te asignó equipo" — no tiene sentido para quien
+// justamente ES el docente). Ambos formularios de código (correo+código y
+// OTP) devuelven perfil.rol en la respuesta de /verificar — solo faltaba
+// leerlo.
+function destinoTrasLogin(datos){
+  return datos?.perfil?.rol === 'docente' ? 'docente.html' : 'juego.html';
 }
 
 function iniciarCuentaReenvio(){
@@ -74,36 +83,9 @@ function iniciarCuentaReenvio(){
 }
 
 function manejarCallbackMagicLink(){
-  // Supabase magic-link: puede volver con #access_token=...&refresh_token=... (implicit) o ?code=... (PKCE)
+  // Sin Supabase: no hay magic-link con access_token en hash. Se conserva stub
+  // por si un correo viejo contiene enlace con token — simplemente informar.
   const hash = window.location.hash || '';
-  const search = window.location.search || '';
-  // Caso 1: implicit con access_token en hash
-  if(hash.includes('access_token')){
-    const params = new URLSearchParams(hash.slice(1));
-    const access_token = params.get('access_token');
-    const refresh_token = params.get('refresh_token');
-    const expires_in = params.get('expires_in');
-    if(access_token){
-      const sesion = { access_token, refresh_token, expires_in: expires_in? parseInt(expires_in,10): 3600, token_type:'bearer' };
-      try{ localStorage.setItem('cc_sesion', JSON.stringify(sesion)); }catch{}
-      // Limpiar hash para no exponer tokens en URL
-      history.replaceState(null,'', window.location.pathname + window.location.search);
-      setMensaje('¡Sesión iniciada por enlace! Redirigiendo al juego…','ok');
-      setTimeout(()=> window.location.href='juego.html', 800);
-      return true;
-    }
-  }
-  // Caso 2: PKCE con ?code= en query (requiere code_verifier que no tenemos si no usamos SDK, pero intentamos)
-  const qs = new URLSearchParams(search);
-  const code = qs.get('code');
-  if(code){
-    // Intentar intercambiar code por sesión vía GoTrue PKCE — si falla, al menos mostrar mensaje
-    // No tenemos code_verifier (lo guarda el SDK en localStorage), pero intentamos sin él para compatibilidad
-    // Si falla, el usuario puede usar el código de 6 dígitos del mismo correo
-    setMensaje('Enlace detectado. Si no redirige, usá el código de 6 dígitos del correo.','info');
-    // No auto-redirigir, dejar que el usuario use el código
-  }
-  // Caso 3: error en hash (?error=...)
   if(hash.includes('error=')){
     const p = new URLSearchParams(hash.slice(1));
     const err = p.get('error_description') || p.get('error') || 'Error en el enlace';
@@ -126,29 +108,16 @@ async function handleRegistro(e){
   if(!privEl?.checked){ setMensaje('Debés aceptar el aviso de privacidad.','error'); privEl?.focus(); return; }
 
   btn.disabled=true; btn.setAttribute('aria-busy','true'); btn.textContent='Enviando…';
-  const {datos, error} = await Auth.registrar({correo});
+  const {error} = await Auth.registrar({correo});
   btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent='Registrarme y enviar código';
   if(error){
     const msg=error.mensaje||error.message||'No se pudo enviar el correo.';
-    // Si es rate limit, el backend ya habrá generado código demo y lo devuelve en datos (pero aquí error no es null, así que no lo vemos)
-    // El fallback de api.js para 429 devuelve {datos:{demo:true,code}, error:null}, así que este branch no se ejecuta para rate limit.
-    // Para otros errores, mostrar y ofrecer modo demo como salida
     setMensaje(msg,'error');
     setCampoError('reg-correo-error',msg);
-    // Ofrecer modo demo si parece límite de Supabase
-    if(msg.toLowerCase().includes('rate')||msg.toLowerCase().includes('limit')||msg.toLowerCase().includes('capacity')||msg.toLowerCase().includes('exceeded')){
-      ofrecerModoDemo(correo);
-    }
     return;
   }
   correoPendiente=correo;
-  // Si vino de demo (Supabase sin correos), datos.demo contiene el código
-  if(datos && datos.demo && datos.code){
-    setMensaje(`Modo demo activo (Supabase sin correos). Tu código es: ${datos.code} — válido 5 min. Ingresalo abajo o hacé clic en “Entrar en modo demo”.`,'ok');
-    mostrarBotonDemo(correo, datos.code);
-  } else {
-    setMensaje('Correo enviado. Revisá tu bandeja (y spam): hacé clic en el enlace del correo para entrar directamente, o copiá el código de 6 dígitos si tu correo lo muestra e ingresalo abajo.','ok');
-  }
+  setMensaje('Correo enviado. Revisá tu bandeja (y spam): hacé clic en el enlace del correo para entrar directamente, o copiá el código de 6 dígitos si tu correo lo muestra e ingresalo abajo.','ok');
   mostrarVista('vista-codigo');
   iniciarCuentaReenvio();
   $('cod-token')?.focus();
@@ -180,9 +149,10 @@ async function handleVerificarCodigo(e){
     return;
   }
   tokenEl?.setAttribute('aria-invalid','false');
-  setMensaje('¡Verificado! Redirigiendo al juego…','ok');
+  const destino = destinoTrasLogin(datos);
+  setMensaje(destino==='docente.html' ? '¡Verificado! Redirigiendo a tu panel…' : '¡Verificado! Redirigiendo al juego…', 'ok');
   // Pequeño delay para que SR anuncie
-  setTimeout(()=>{ window.location.href='juego.html'; }, 600);
+  setTimeout(()=>{ window.location.href=destino; }, 600);
 }
 
 async function handleReenviar(){
@@ -196,27 +166,36 @@ async function handleReenviar(){
   iniciarCuentaReenvio();
 }
 
+// 2026-08-26: este formulario dejó de "pedir un código por correo" (Resend
+// en sandbox solo entrega a la propia cuenta dueña — CONTRACT §3.4) y pasó
+// a ser un ingreso directo: correo + el código que el docente ya te dio
+// (de equipo o el personal). Un solo paso, sin pantalla intermedia — mismo
+// endpoint /verificar que usa #form-codigo, así que acepta código personal,
+// de equipo o el OTP viejo si alguien todavía tiene uno vigente.
 async function handleAcceso(e){
   e.preventDefault();
   const correoEl=$('acc-correo');
+  const codigoEl=$('acc-codigo');
   const correo=(correoEl?.value||'').trim().toLowerCase();
+  const codigo=(codigoEl?.value||'').trim();
   setCampoError('acc-correo-error','');
+  setCampoError('acc-codigo-error','');
   setMensaje('');
   if(!validarEmail(correo)){ setCampoError('acc-correo-error','Ingresá un correo válido.'); correoEl?.focus(); return; }
+  if(!codigo){ setCampoError('acc-codigo-error','Ingresá el código que te dio tu docente.'); codigoEl?.focus(); return; }
   const btn=$('btn-acceder');
-  btn.disabled=true; btn.textContent='Enviando…';
-  const {datos, error} = await Auth.enviarCodigo(correo);
-  btn.disabled=false; btn.textContent='Enviar código de acceso';
-  if(error){ setMensaje(error.mensaje||'No se pudo enviar el correo.','error'); if((error.mensaje||'').toLowerCase().includes('rate')||String(error.estado)=='429') ofrecerModoDemo(correo); return; }
-  correoPendiente=correo;
-  if(datos && datos.demo && datos.code){
-    setMensaje(`Modo demo activo. Tu código es: ${datos.code} — válido 5 min.`,'ok');
-    mostrarBotonDemo(correo, datos.code);
-  } else {
-    setMensaje('Correo enviado. Revisá tu bandeja: hacé clic en el enlace para acceder, o copiá el código si lo ves.','ok');
+  btn.disabled=true; btn.textContent='Entrando…';
+  const {datos, error} = await Auth.verificarCodigo(correo, codigo);
+  btn.disabled=false; btn.textContent='Entrar';
+  if(error){
+    const msg=error.mensaje||error.message||'Código incorrecto o correo no está en la nómina.';
+    setCampoError('acc-codigo-error', msg);
+    setMensaje(msg,'error');
+    return;
   }
-  mostrarVista('vista-codigo');
-  iniciarCuentaReenvio();
+  const destino = destinoTrasLogin(datos);
+  setMensaje(destino==='docente.html' ? '¡Verificado! Redirigiendo a tu panel…' : '¡Verificado! Redirigiendo…', 'ok');
+  setTimeout(()=>{ window.location.href=destino; }, 500);
 }
 
 function enlazarNav(){
@@ -242,103 +221,110 @@ function enlazarNav(){
   });
 }
 
-function mostrarBotonDemo(correo, code){
-  const cont=$('vista-codigo');
-  if(!cont) return;
-  let box=document.getElementById('demo-box');
-  if(!box){
-    box=document.createElement('div');
-    box.id='demo-box';
-    box.className='card';
-    box.style.marginTop='1rem';
-    box.style.padding='1rem';
-    box.style.border='1px solid var(--color-acento)';
-    box.style.background='var(--color-acento-suave)';
-    cont.appendChild(box);
-  }
-  box.textContent='';
-  const p=document.createElement('p');
-  p.textContent=`Código demo para ${correo}: ${code}`;
-  p.style.fontWeight='600';
-  p.style.fontFamily='var(--fuente-mono)';
-  const btn=document.createElement('button');
-  btn.className='btn btn--primario';
-  btn.type='button';
-  btn.textContent='Entrar en modo demo (sin correo)';
-  btn.addEventListener('click', async ()=>{
-    // Generar/activar demo y verificar directo
-    const {activarDemo}=await import('./demo.js');
-    activarDemo(correo);
-    // Guardar sesión demo directa sin pasar por verify
-    localStorage.setItem('cc_sesion', JSON.stringify({access_token:'demo-'+btoa(correo).slice(0,16), refresh_token:'demo', user:{email:correo}}));
-    setMensaje('Modo demo activo — entrando al juego…','ok');
-    setTimeout(()=> window.location.href='juego.html', 400);
-  });
-  const codeBtn=document.createElement('button');
-  codeBtn.className='btn btn--ghost';
-  codeBtn.type='button';
-  codeBtn.textContent='Copiar código';
-  codeBtn.style.marginLeft='0.5rem';
-  codeBtn.addEventListener('click', ()=>{ navigator.clipboard?.writeText(code); const t=$('cod-token'); if(t) t.value=code; });
-  box.append(p, btn, codeBtn);
+// ---------------------------------------------------------------------------
+// Acceso por código de equipo (2026-08-26) — vía principal para estudiantes.
+// Dos pasos: buscar el equipo por su código (revela solo nombres), elegir
+// quién sos, entrar. El servidor vuelve a validar todo — esto solo evita
+// que alguien intente sin sentido.
+// ---------------------------------------------------------------------------
+let codigoEquipoPendiente = '';
+let perfilEquipoElegido = '';
+
+function alternarTabsAcceso(activo){
+  const tabEquipo=$('tab-acceso-equipo'), tabCorreo=$('tab-acceso-correo');
+  const panelEquipo=$('modo-acceso-equipo'), panelCorreo=$('modo-acceso-correo');
+  const esEquipo = activo==='equipo';
+  if(panelEquipo) panelEquipo.hidden = !esEquipo;
+  if(panelCorreo) panelCorreo.hidden = esEquipo;
+  if(tabEquipo){ tabEquipo.setAttribute('aria-selected', String(esEquipo)); tabEquipo.classList.toggle('border-primary', esEquipo); tabEquipo.classList.toggle('text-primary', esEquipo); tabEquipo.classList.toggle('border-transparent', !esEquipo); tabEquipo.classList.toggle('text-on-surface-variant', !esEquipo); }
+  if(tabCorreo){ tabCorreo.setAttribute('aria-selected', String(!esEquipo)); tabCorreo.classList.toggle('border-primary', !esEquipo); tabCorreo.classList.toggle('text-primary', !esEquipo); tabCorreo.classList.toggle('border-transparent', esEquipo); tabCorreo.classList.toggle('text-on-surface-variant', esEquipo); }
 }
 
-function ofrecerModoDemo(correo){
-  // Cuando Supabase devuelve 429, ofrecer entrar en demo
-  const codePrompt = prompt(`Supabase alcanzó el límite de correos (429). ¿Querés entrar en modo demo sin correo para la clase?\n\nIngresá tu correo para generar un código demo (o cancelá):`, correo||'');
-  if(!codePrompt) return;
-  const c=(codePrompt||correo||'').trim().toLowerCase();
-  if(!c || !c.includes('@')) return;
-  import('./demo.js').then(({activarDemo, generarCodigoDemo})=>{
-    activarDemo(c);
-    const code=generarCodigoDemo(c);
-    correoPendiente=c;
-    mostrarVista('vista-codigo');
-    mostrarBotonDemo(c, code);
-    setMensaje(`Modo demo activo para ${c}. Código: ${code} — podés entrar directo sin esperar correo.`,'ok');
+async function handleBuscarEquipo(e){
+  e.preventDefault();
+  setCampoError('eq-codigo-error','');
+  const input=$('eq-codigo');
+  const codigo=(input?.value||'').trim();
+  if(!codigo){ setCampoError('eq-codigo-error','Ingresá el código.'); input?.focus(); return; }
+  const btn=$('btn-buscar-equipo');
+  btn.disabled=true;
+  const {datos, error} = await Auth.equipoPorCodigo(codigo);
+  btn.disabled=false;
+  if(error || !datos?.integrantes){
+    setCampoError('eq-codigo-error', error?.mensaje==='codigo_vencido' ? 'Ese código venció. Pedile uno nuevo a tu docente.' : 'Código inválido. Revisalo con tu docente.');
+    return;
+  }
+  codigoEquipoPendiente = codigo;
+  perfilEquipoElegido = '';
+  $('eq-nombre-equipo').textContent = datos.equipoNombre || 'tu equipo';
+  const lista = $('eq-lista-integrantes');
+  lista.textContent='';
+  datos.integrantes.forEach(p=>{
+    const li=document.createElement('li'); li.setAttribute('role','listitem');
+    const label=document.createElement('label'); label.className='flex items-center gap-3 p-3 border border-audit-border rounded cursor-pointer hover:border-primary';
+    const radio=document.createElement('input'); radio.type='radio'; radio.name='eq-quien-soy'; radio.value=p.perfil_id;
+    radio.addEventListener('change', ()=>{ perfilEquipoElegido = radio.value; $('btn-eq-entrar').disabled = false; });
+    const span=document.createElement('span'); span.className='font-body-md text-body-md text-text-on-document'; span.textContent = p.nombre;
+    label.append(radio, span);
+    li.appendChild(label);
+    lista.appendChild(li);
   });
+  $('btn-eq-entrar').disabled = true;
+  $('eq-resultado').removeAttribute('hidden');
+}
+
+async function handleEntrarEquipo(){
+  if(!codigoEquipoPendiente || !perfilEquipoElegido) return;
+  const btn=$('btn-eq-entrar');
+  btn.disabled=true;
+  const {error} = await Auth.accesoEquipo(codigoEquipoPendiente, perfilEquipoElegido);
+  if(error){
+    btn.disabled=false;
+    setCampoError('eq-codigo-error', 'No se pudo entrar. Volvé a buscar el equipo.');
+    return;
+  }
+  setTimeout(()=>{ window.location.href='juego.html'; }, 300);
 }
 
 function initAuth(){
   // Si viene de un magic-link con token en hash, manejarlo antes de mostrar vistas
   if(manejarCallbackMagicLink()) return;
-  // Detectar si ya está en demo y mostrar aviso
-  try{
-    if(localStorage.getItem('cc_modo_demo')==='1'){
-      const sesRaw=localStorage.getItem('cc_demo_sesion');
-      if(sesRaw){
-        const j=JSON.parse(sesRaw);
-        setTimeout(()=> setMensaje(`Estás en modo demo (${j.email||'demo'}). Podés entrar sin correo.`,'info'), 400);
-      }
-    }
-  }catch{}
   enlazarNav();
   $('form-registro')?.addEventListener('submit', handleRegistro);
   $('form-codigo')?.addEventListener('submit', handleVerificarCodigo);
   $('btn-reenviar-codigo')?.addEventListener('click', handleReenviar);
   $('form-acceso')?.addEventListener('submit', handleAcceso);
+  $('tab-acceso-equipo')?.addEventListener('click', ()=> alternarTabsAcceso('equipo'));
+  $('tab-acceso-correo')?.addEventListener('click', ()=> alternarTabsAcceso('correo'));
+  $('form-equipo-codigo')?.addEventListener('submit', handleBuscarEquipo);
+  $('btn-eq-entrar')?.addEventListener('click', handleEntrarEquipo);
+  $('eq-codigo')?.addEventListener('input', (e)=>{ e.target.value = e.target.value.toUpperCase(); });
+  // acc-codigo acepta código de equipo (letras+dígitos) o personal/OTP (solo
+  // dígitos) — mayúscula es no-op para dígitos, así que es seguro aplicarla
+  // siempre y mantiene la misma UX que el campo de código de equipo.
+  $('acc-codigo')?.addEventListener('input', (e)=>{ e.target.value = e.target.value.toUpperCase(); });
   // Enter en token autotrim
   $('cod-token')?.addEventListener('input', (e)=>{
     e.target.value = e.target.value.replace(/\D/g,'').slice(0,6);
     if(e.target.value.length===6) e.target.setAttribute('aria-invalid','false');
   });
-  // Si ya hay sesión, sugerir ir a juego
+  // Si ya hay sesión (cookie httpOnly válida → /api/auth/sesion 200), sugerir ir a juego
   Auth.sesion().then(r=>{
-    const datos=r?.datos;
-    if(datos && datos.access_token){
-      const aviso=$('mensaje-auth');
-      if(aviso){
-        aviso.textContent='Ya tenés sesión activa. Podés ir directo al juego.';
-        // Añadir botón dinámico si no existe
-        if(!document.getElementById('btn-ir-juego')){
-          const b=document.createElement('a');
-          b.id='btn-ir-juego'; b.className='btn btn--primario'; b.href='juego.html'; b.textContent='Ir al juego';
-          b.style.marginLeft='0.75rem';
-          aviso.appendChild(b);
-        }
-      }
-    }
-  });
+     const datos=r?.datos;
+     const tieneSesion = datos && (datos.perfil || datos.correo || datos.id || datos.sesion || datos.usuario);
+     if(tieneSesion){
+       const aviso=$('mensaje-auth');
+       if(aviso){
+         aviso.textContent='Ya tenés sesión activa. Podés ir directo al juego.';
+         if(!document.getElementById('btn-ir-juego')){
+           const b=document.createElement('a');
+           b.id='btn-ir-juego'; b.className='border border-primary text-primary px-3 py-1 text-sm font-evidence-data uppercase'; b.href='juego.html'; b.textContent='Ir al juego';
+           b.style.marginLeft='0.75rem';
+           aviso.appendChild(b);
+         }
+       }
+     }
+   });
 }
 
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initAuth);

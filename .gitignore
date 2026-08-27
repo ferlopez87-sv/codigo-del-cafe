@@ -4,6 +4,8 @@
 !.env.ejemplo
 *.key
 *.pem
+Stitch_mpc.json
+*_mpc.json
 
 # Supabase CLI
 .supabase/
@@ -13,8 +15,28 @@ supabase/.temp/
 .DS_Store
 Thumbs.db
 
+# Dependencias (se regeneran con npm install)
+node_modules/
+package-lock.json
+
 # Andamiaje temporal del harness (se borra al integrar)
 _src/
+undefined/
 
 # Agentes — prompts del harness, no se suben a GitHub (quedan local)
 *-agent.md
+
+# Archivos de diseño/herramientas locales
+.stitch/
+
+# Documentación interna / datos de aula (excepto README.md)
+*.md
+!README.md
+
+# Archivos de aula (nóminas, reportes, etc.)
+*.xlsx
+*.csv
+
+# Logs y temporales
+*.log
+tmp/

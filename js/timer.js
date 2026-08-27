@@ -134,11 +134,14 @@ function _dispararTiempoAgotado() {
   _renderCronometro(0);
 
   // Bloqueo genérico de inputs del juego (no rompe si no existen)
+  // #panel-estacion (CONTRACT §7.2): antes #modal-estacion — el tablero ya no
+  // es un diálogo modal, pero el bloqueo de inputs al agotarse el tiempo sigue
+  // aplicando sobre el panel de estación persistente.
   const selectoresBloqueo = [
-    '#modal-estacion input',
-    '#modal-estacion button',
-    '#modal-estacion select',
-    '#modal-estacion textarea',
+    '#panel-estacion input',
+    '#panel-estacion button',
+    '#panel-estacion select',
+    '#panel-estacion textarea',
     '#input-codigo-maestro',
     '#btn-verificar-maestro',
     '#btn-verificar',
@@ -149,15 +152,6 @@ function _dispararTiempoAgotado() {
       el.setAttribute('aria-disabled', 'true');
     }
   }
-
-  // Cerrar modal si está abierto para mostrar veredicto/resumen
-  const modal = _el('modal-estacion');
-  const backdrop = _el('modal-backdrop');
-  if (modal && !modal.hasAttribute('hidden') && modal.getAttribute('hidden') === null) {
-    // No forzar cierre si el juego quiere otro flujo; solo ocultar si existe helper externo
-    // Se deja al caller decidir, pero se asegura backdrop oculto si onTiempoAgotado no lo hace
-  }
-  void backdrop;
 
   if (typeof _onTiempoAgotado === 'function') {
     try {

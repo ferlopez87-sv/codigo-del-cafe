@@ -1,4 +1,4 @@
-# El Código del Café — Escape Room de Sostenibilidad
+# Misión: El código secreto del café — Escape Room de Sostenibilidad
 
 Webapp vanilla (HTML/CSS/JS) + Supabase (Postgres/Auth/RLS) para la materia Sostenibilidad — Escuela Mónica Herrera.
 
@@ -19,7 +19,7 @@ Abrir http://localhost:8080
 2. En Render Dashboard → New → Blueprint → conecta `ferlopez87-sv/codigo-del-cafe` → Apply.
 3. Servicio `codigo-del-cafe` tipo **Docker** (usa `Dockerfile`), plan Free, `healthCheckPath: /`, `autoDeploy: true`.
    - Alternativa sin Docker: comenta el bloque `docker` en `render.yaml` y descomenta el bloque `static` (Static Site, `staticPublishPath: .`).
-4. Variables (opcional): si querés no tocar `js/config.js`, añade `SUPABASE_URL` y `SUPABASE_ANON_KEY` en Render → Environment (el `Dockerfile` las inyecta si las definís, sino usa las de `js/config.js`).
+4. `js/config.js` ya trae `SUPABASE_URL` y la clave publicable reales — es lo que lee el navegador, y está bien que sea pública (RLS la protege, no el secreto). El `Dockerfile` solo copia archivos estáticos: no hay variables de entorno de Render que inyectar en tiempo de build. Si cambiás de proyecto Supabase, editá `js/config.js` directamente antes de hacer push.
 5. Cada `git push` a `main` redeplega automático.
 
 Docker local y Render comparten el mismo `Dockerfile` y `render.yaml` — GitHub es el puente.
@@ -33,6 +33,11 @@ Docente: `fglopez@monicaherrera.edu.sv` (en `docentes_autorizados`), nómina por
 
 Site URL en Supabase: `https://<tu-app>.onrender.com` + `http://localhost:8080` en **Authentication → URL Configuration → Redirect URLs** (para que el magic-link vuelva a la app). Email Templates → Magic Link añade `{{ .Token }}` para que llegue código además de link.
 
-## Modo demo sin correo
-Si Supabase llega a `429 Email rate limit`, la app activa `js/demo.js` (código local determinístico, válido 5 min) y permite `Entrar en modo demo` sin correo — para la clase. Todo en `localStorage`, validación igual a `sql/03`.
+## Límite de envío de correos (429)
+
+El plan gratuito de Supabase Auth limita el envío de OTP a muy pocos correos por hora — se agota rápido con una clase completa registrándose a la vez. **No hay modo sin correo**: si Supabase devuelve `429`, la app muestra un error honesto y pide esperar o contactar al docente (CONTRACT §0.6 — se descartó a propósito un "modo demo" que simulaba sesiones, porque el progreso de esos estudiantes nunca llegaba a la base y el rol de docente se podía obtener con solo poner "docente" en el correo).
+
+**La solución real:** configurar un proveedor SMTP propio en *Supabase → Authentication → Email → SMTP Settings* (Resend, Postmark, etc. — cualquiera con un plan gratuito de unos miles de correos al mes alcanza de sobra para una clase). Esto saca el envío de la cuota compartida de Supabase y el problema desaparece. Es una configuración de 5 minutos en el panel, no requiere tocar código.
+
+Alternativa mientras se configura el SMTP: escalonar el registro (abrirlo el día anterior en vez de todos a la vez en clase) para no agotar la cuota compartida de una sola vez.
 

@@ -1,226 +1,146 @@
-<!DOCTYPE html>
-<html lang="es-SV">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="El Código del Café — panel docente. Sesiones, nómina, equipos, monitoreo y rúbrica.">
-  <title>El Código del Café — Docente</title>
-  <link rel="stylesheet" href="styles.css">
+<!DOCTYPE html><html class="dark" lang="es-SV"><head>
+<meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta name="description" content="Misión: El código secreto del café — Panel docente. Sesiones, nómina, equipos, monitoreo y rúbrica.">
+<title>Misión: El código secreto del café — Docente</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500;800&display=swap" rel="stylesheet">
+<script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#88d982","primary-fixed":"#a3f69c","on-primary":"#003909","primary-container":"#2e7d32","on-primary-container":"#cbffc2","background":"#131313","surface":"#131313","surface-graphite":"#1E1E1E","surface-document":"#F5F5DC","text-on-document":"#121212","audit-border":"#2C2F33","on-surface":"#e5e2e1","on-surface-variant":"#bfcaba","surface-container":"#201f1f","surface-container-high":"#2a2a2a","surface-container-low":"#1c1b1b","surface-container-lowest":"#0e0e0e","outline":"#8a9485","outline-variant":"#40493d","error":"#ffb4ab","error-container":"#93000a","on-error":"#690005","tertiary-container":"#cf2f2d","secondary":"#c8c8b0"},spacing:{"card-padding":"20px","stack-gap":"12px","margin-main":"24px","sidebar-width":"280px","gutter-grid":"16px"},fontFamily:{"body-md":["Hanken Grotesk"],"headline-lg":["Hanken Grotesk"],"headline-md":["Hanken Grotesk"],"evidence-data":["JetBrains Mono"],"stamp-lg":["JetBrains Mono"],"label-sm":["JetBrains Mono"]},fontSize:{"body-md":["16px",{lineHeight:"24px",fontWeight:"400"}],"headline-lg":["32px",{lineHeight:"40px",letterSpacing:"-0.02em",fontWeight:"700"}],"headline-md":["24px",{lineHeight:"32px",fontWeight:"600"}],"evidence-data":["14px",{lineHeight:"20px",fontWeight:"500"}],"stamp-lg":["20px",{lineHeight:"24px",letterSpacing:"0.1em",fontWeight:"800"}],"label-sm":["12px",{lineHeight:"16px",fontWeight:"400"}]}}}}</script>
+<style>
+body{background:#131313;color:#e5e2e1}
+:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.stamp-rotation{transform:rotate(-2deg)}
+</style>
 </head>
-<body>
-  <!--
-    CONTRACT §14.4 — XSS almacenado: nombres/correos/carnés de estudiantes
-    se muestran al docente; siempre con textContent, nunca innerHTML.
-  -->
-  <a class="skip-link" href="#contenido-principal">Saltar al contenido</a>
+<body class="font-body-md bg-background text-on-background flex flex-col md:flex-row min-h-screen antialiased">
+<header class="md:hidden flex justify-between items-center px-4 h-16 bg-surface border-b border-audit-border fixed top-0 w-full z-50">
+<div class="flex items-center gap-3"><span class="material-symbols-outlined text-primary" aria-hidden="true">admin_panel_settings</span><span class="font-stamp-lg text-stamp-lg uppercase text-primary">Docente</span></div>
+<span class="font-evidence-data text-xs text-primary border border-primary px-2 py-1">PANEL DOCENTE</span>
+</header>
 
-  <header>
-    <div class="contenedor">
-      <p class="badge badge--acento" aria-hidden="true">CGC · Panel docente</p>
-      <h1>El Código del Café — Docente</h1>
-      <p class="campo__ayuda">Gestión de sesiones, nómina, equipos y veredicto. Rol docente requerido.</p>
-    </div>
-  </header>
+<nav class="hidden md:flex flex-col h-full py-6 bg-surface-container border-r border-audit-border fixed left-0 top-0 w-sidebar-width shadow-md z-40">
+<div class="px-6 mb-6"><h2 class="font-stamp-lg text-stamp-lg text-on-surface-variant opacity-50">Misión: El código secreto del café</h2><p class="font-label-sm text-label-sm uppercase text-primary mt-1">Panel docente</p><div class="flex items-center gap-2 mt-4 bg-surface-graphite p-3 rounded border border-audit-border" title="Sesión iniciada con esta cuenta durante toda la visita al panel"><span class="material-symbols-outlined text-primary" aria-hidden="true">badge</span><span id="docente-usuario-actual" class="font-evidence-data text-evidence-data truncate">CGC · Auditoría</span></div></div>
+<div class="flex-1 px-4 space-y-1 text-sm">
+<a href="#sec-sesiones" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Sesiones</a>
+<a href="#sec-nomina" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Nómina</a>
+<a href="#sec-equipos" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Equipos</a>
+<a href="#sec-monitoreo" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Monitoreo</a>
+<a href="#sec-rubrica" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Rúbrica</a>
+<a href="#sec-cierre" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Cierre</a>
+<a href="#consola-super-admin" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Consola</a>
+</div>
+<div class="px-6 mt-auto pt-4 border-t border-audit-border"><a href="index.html" class="w-full flex justify-center items-center gap-2 border border-audit-border text-on-surface-variant py-2 font-evidence-data uppercase hover:border-primary hover:text-primary no-underline"><span class="material-symbols-outlined text-sm" aria-hidden="true">logout</span>Salir</a></div>
+</nav>
 
-  <main id="contenido-principal">
+<main id="contenido-principal" class="flex-1 md:ml-sidebar-width pt-20 md:pt-8 px-4 md:px-8 pb-12 overflow-y-auto">
+<div class="max-w-6xl mx-auto space-y-10">
 
-    <!-- Gestión de sesiones -->
-    <section aria-labelledby="sesiones-titulo">
-      <header>
-        <h2 id="sesiones-titulo" tabindex="-1">Sesiones</h2>
-        <span id="sesion-estado" role="status" aria-live="polite" aria-atomic="true" class="badge">borrador</span>
-      </header>
+<!-- SESIONES §9.1.9 -->
+<section id="sec-sesiones" aria-labelledby="sesiones-titulo" class="space-y-4">
+<!-- Reemplaza a alert() para errores de crear/abrir/cerrar sesión: un
+     confirm() seguido de un alert() casi inmediato hace que Chrome, en
+     algunos casos, descarte el segundo diálogo (protección anti-spam de
+     diálogos) — el error "aparecía y se cerraba solo". Un mensaje en la
+     página no depende de ese timing. -->
+<div id="docente-mensaje" role="alert" aria-live="assertive" aria-atomic="true" hidden class="p-3 border border-error bg-error/10 text-error font-evidence-data text-sm"></div>
+<div class="flex flex-col md:flex-row md:justify-between md:items-end gap-4 border-b border-audit-border pb-4">
+<div><h2 id="sesiones-titulo" tabindex="-1" class="font-headline-lg text-headline-lg uppercase">Sesiones <span class="text-on-surface-variant font-light opacity-50">/ Data Vault</span></h2><p class="font-evidence-data text-on-surface-variant mt-1">Gestión de sesiones, duración y estado. Rol docente requerido. <span id="sesion-estado" role="status" aria-live="polite" class="ml-2 border-2 border-primary text-primary px-2 py-1 font-stamp-lg text-xs stamp-rotation inline-block">borrador</span></p></div>
+<button id="btn-nueva-sesion" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-surface-graphite flex items-center gap-2 self-start"><span class="material-symbols-outlined text-sm" aria-hidden="true">add</span>Nueva sesión</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="lg:col-span-2 bg-surface-document text-text-on-document p-6 rounded shadow-[0_2px_12px_rgba(0,0,0,.6)] border-l-4 border-primary">
+<ul id="lista-sesiones" role="list" aria-label="Sesiones del docente" class="space-y-2"></ul>
+<div class="flex flex-wrap gap-3 mt-6"><button id="btn-abrir-sesion" aria-describedby="sesion-estado" class="flex-1 bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 flex items-center justify-center gap-2 hover:bg-primary hover:text-on-primary"><span class="material-symbols-outlined text-sm" aria-hidden="true">play_arrow</span>Abrir sesión</button><button id="btn-ver-sesion" aria-describedby="sesion-estado" hidden title="Baja a Monitoreo en vivo, con los datos de esta sesión ya cargados" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 flex items-center gap-2 hover:bg-primary hover:text-on-primary"><span class="material-symbols-outlined text-sm" aria-hidden="true">visibility</span>Ver sesión en curso</button><button id="btn-cerrar-sesion" aria-describedby="sesion-estado" class="bg-surface-graphite border border-error text-error font-evidence-data uppercase px-6 py-3 hover:bg-error hover:text-on-error"><span class="material-symbols-outlined text-sm" aria-hidden="true">close</span>Cerrar</button><button id="btn-borrar-sesion" aria-describedby="sesion-estado" title="Borra la sesión y todo lo suyo (equipos, nómina, códigos) para siempre — distinto de Cerrar" class="bg-error/10 border border-error text-error font-evidence-data uppercase px-6 py-3 hover:bg-error hover:text-on-error"><span class="material-symbols-outlined text-sm" aria-hidden="true">delete_forever</span>Borrar</button></div>
+</div>
+<div class="bg-surface-container-high rounded border border-audit-border p-6">
+<h3 class="font-label-sm text-label-sm uppercase text-on-surface-variant mb-3">Crear sesión</h3>
+<form id="form-sesion" aria-labelledby="sesiones-titulo" class="space-y-4">
+<div><label class="font-label-sm text-label-sm uppercase font-bold" for="sesion-nombre">Nombre de la sesión</label><input id="sesion-nombre" name="nombre" type="text" required aria-required="true" placeholder="Ej. Sostenibilidad — Sección A — 2026" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none"></div>
+<div><label class="font-label-sm text-label-sm uppercase font-bold" for="sesion-duracion">Duración (minutos 5–180)</label><input id="sesion-duracion" name="duracion_minutos" type="number" inputmode="numeric" min="5" max="180" step="1" value="50" aria-describedby="sesion-duracion-ayuda" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary outline-none"><span id="sesion-duracion-ayuda" class="font-label-sm text-label-sm text-on-surface-variant">El reloj de clase lo controla la sesión.</span></div>
+<button type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 hover:bg-primary hover:text-on-primary">Crear sesión</button>
+</form>
+</div>
+</div>
+</section>
 
-      <ul id="lista-sesiones" role="list" aria-label="Sesiones del docente"></ul>
+<!-- NÓMINA §9.1.10 -->
+<section id="sec-nomina" aria-labelledby="nomina-titulo" class="space-y-4">
+<header class="border-b border-audit-border pb-4"><h2 id="nomina-titulo" class="font-headline-lg text-headline-lg flex items-center gap-3"><span class="material-symbols-outlined text-primary" aria-hidden="true">group</span>Nómina del curso</h2><p class="font-evidence-data text-on-surface-variant mt-1">La nómina es el control de acceso. Validación al verificar código, no al solicitarlo.</p></header>
+<div class="bg-surface-graphite border-l-4 border-audit-border p-4 flex gap-3"><span class="material-symbols-outlined text-on-surface-variant" aria-hidden="true">policy</span><p class="font-body-md text-on-surface-variant">Pegá CSV <code>nombre,correo,carne</code> — una fila por estudiante. Correos fuera de <code>@monicaherrera.edu.sv</code> solo advierten, no bloquean.</p></div>
+<form id="form-nomina" aria-labelledby="nomina-titulo" class="grid md:grid-cols-2 gap-4">
+<div class="md:col-span-2"><label class="font-label-sm uppercase font-bold" for="nomina-pegar">Pegar CSV</label><textarea id="nomina-pegar" aria-describedby="nomina-pegar-ayuda nomina-pegar-error" placeholder="Ana Pérez,ana.perez@monicaherrera.edu.sv,2024-001" rows="6" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary outline-none font-evidence-data"></textarea><span id="nomina-pegar-ayuda" class="font-label-sm text-on-surface-variant">Formato: nombre,correo,carne</span><span id="nomina-pegar-error" class="font-evidence-data text-error block" role="alert" aria-live="assertive"></span></div>
+<div class="flex gap-3"><button id="btn-cargar-nomina" type="submit" class="flex-1 bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 hover:bg-primary hover:text-on-primary">Cargar nómina</button><button id="btn-agregar-a-nomina" type="button" class="border border-audit-border text-on-surface-variant font-evidence-data uppercase px-6 py-3 hover:border-primary hover:text-primary">Agregar estudiante</button></div>
+</form>
+<div class="bg-surface-graphite border border-audit-border rounded overflow-hidden">
+<div class="overflow-x-auto"><table id="tabla-nomina" class="w-full text-left"><caption class="sr-only">Nómina cargada</caption><thead class="bg-surface-container border-b border-audit-border font-label-sm uppercase text-on-surface-variant"><tr><th class="p-3 font-normal">Nombre</th><th class="p-3 font-normal">Correo</th><th class="p-3 font-normal">Carné</th><th class="p-3 font-normal">Aviso</th></tr></thead><tbody class="font-evidence-data divide-y divide-audit-border"></tbody></table></div>
+</div>
+</section>
 
-      <div class="grupo-botones">
-        <button id="btn-nueva-sesion" class="btn btn--primario" type="button">Nueva sesión</button>
-        <button id="btn-abrir-sesion" class="btn btn--primario" type="button" aria-describedby="sesion-estado">Abrir sesión</button>
-        <button id="btn-cerrar-sesion" class="btn btn--ghost" type="button" aria-describedby="sesion-estado">Cerrar sesión</button>
-      </div>
+<!-- EQUIPOS §9.1.11 -->
+<section id="sec-equipos" aria-labelledby="equipos-titulo" class="space-y-4">
+<header class="border-b border-audit-border pb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-3"><div><h2 id="equipos-titulo" class="font-headline-lg text-headline-lg">Equipos y asignación</h2><p class="font-evidence-data text-on-surface-variant mt-1">Asignación disponible durante la clase. Dentro de cada equipo, marcá un único apuntador.</p></div><button id="btn-nuevo-equipo" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary flex items-center gap-2 self-start"><span class="material-symbols-outlined text-sm" aria-hidden="true">add_circle</span>Nuevo equipo</button></header>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<div class="lg:col-span-4">
+<div class="bg-surface-container border border-audit-border rounded-t p-3 flex justify-between items-center"><h3 class="font-evidence-data font-bold uppercase flex items-center gap-2"><span class="material-symbols-outlined text-error text-sm" aria-hidden="true">person_off</span>Registrados sin equipo</h3></div>
+<ul id="lista-registrados" role="list" aria-label="Estudiantes sin equipo" class="bg-surface-container border-x border-b border-audit-border rounded-b p-2 space-y-2 min-h-[200px]"></ul>
+</div>
+<div class="lg:col-span-8">
+<div class="bg-surface-container border border-audit-border rounded-t p-3 flex justify-between items-center"><h3 id="equipos-lista-titulo" class="font-evidence-data font-bold uppercase flex items-center gap-2"><span class="material-symbols-outlined text-primary text-sm" aria-hidden="true">groups</span>Equipos de la sesión</h3></div>
+<div id="lista-equipos" role="list" aria-label="Equipos" class="bg-surface border-x border-b border-audit-border rounded-b p-4 min-h-[300px] grid md:grid-cols-2 gap-4"></div>
+<div id="control-apuntador" hidden aria-hidden="true"></div>
+<div id="aviso-sin-apuntador" class="mt-3 p-3 border border-error bg-error-container/10 text-error font-evidence-data text-sm" hidden role="alert"><span class="material-symbols-outlined text-sm align-middle" aria-hidden="true">warning</span> Este equipo no tiene apuntador marcado. No podrá enviar respuestas hasta que elijas uno.</div>
+</div>
+</div>
+</section>
 
-      <form id="form-sesion" aria-labelledby="sesiones-titulo">
-        <div class="campo">
-          <label class="campo__label" for="sesion-nombre">Nombre de la sesión</label>
-          <input id="sesion-nombre" name="nombre" type="text" required aria-required="true" placeholder="Ej. Sostenibilidad — Sección A — 2026">
-        </div>
-        <div class="campo">
-          <label class="campo__label" for="sesion-duracion">Duración (minutos, 5–180)</label>
-          <input id="sesion-duracion" name="duracion_minutos" type="number" inputmode="numeric" min="5" max="180" step="1" value="50" aria-describedby="sesion-duracion-ayuda">
-          <span class="campo__ayuda" id="sesion-duracion-ayuda">El reloj de clase lo controla la sesión. Asignación de equipo disponible durante la clase.</span>
-        </div>
-        <button class="btn btn--primario" type="submit">Crear sesión</button>
-      </form>
-    </section>
+<!-- MONITOREO §9.1.12 -->
+<section id="sec-monitoreo" aria-labelledby="monitoreo-titulo" class="space-y-4">
+<header class="border-b border-audit-border pb-4 flex justify-between items-center"><h2 id="monitoreo-titulo" class="font-headline-lg text-headline-lg">Monitoreo en vivo</h2><button id="btn-exportar-csv" class="border border-audit-border text-on-surface-variant font-evidence-data uppercase px-4 py-2 hover:border-primary hover:text-primary flex items-center gap-2" aria-describedby="export-ayuda"><span class="material-symbols-outlined text-sm" aria-hidden="true">download</span>Exportar CSV</button></header>
+<span id="export-ayuda" class="font-label-sm text-on-surface-variant">Descarga desempeño: equipo, integrantes (marcando apuntador), resueltas, intentos, tiempo, motivo.</span>
+<div class="bg-surface-graphite border border-audit-border rounded overflow-hidden">
+<div class="overflow-x-auto"><table id="tabla-monitoreo" class="w-full text-left"><caption class="sr-only">Monitoreo en vivo</caption><thead class="bg-surface-container border-b border-audit-border font-label-sm uppercase text-on-surface-variant"><tr><th class="p-3 font-normal">Equipo</th><th class="p-3 font-normal">Integrantes</th><th class="p-3 font-normal">Resueltas</th><th class="p-3 font-normal">Intentos</th><th class="p-3 font-normal">Tiempo usado</th><th class="p-3 font-normal">Estado</th></tr></thead><tbody class="font-evidence-data divide-y divide-audit-border" aria-live="polite" aria-atomic="false"></tbody></table></div>
+</div>
+</section>
 
-    <!-- Nómina — carga CSV nombre,correo,carne -->
-    <section aria-labelledby="nomina-titulo">
-      <h2 id="nomina-titulo">Nómina del curso</h2>
-      <p class="campo__ayuda" id="nomina-pegar-ayuda">Pegá CSV con formato <code>nombre,correo,carne</code> — una fila por estudiante. El dominio institucional <code>@monicaherrera.edu.sv</code> solo advierte, no bloquea.</p>
+<!-- RÚBRICA §9.1.13 -->
+<section id="sec-rubrica" aria-labelledby="rubrica-titulo" class="space-y-4">
+<h2 id="rubrica-titulo" class="font-headline-lg text-headline-lg border-b border-audit-border pb-4">Rúbrica y calificación</h2>
+<div class="grid lg:grid-cols-12 gap-6">
+<div class="lg:col-span-4 bg-surface-document text-text-on-document p-6 rounded shadow-[0_2px_8px_rgba(0,0,0,.4)]"><h3 class="font-headline-md flex items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">analytics</span>Evidencia de juego</h3>
+<label class="block font-label-sm text-label-sm uppercase font-bold mt-4" for="rubrica-equipo">Equipo a calificar</label>
+<select id="rubrica-equipo" class="mt-1 w-full bg-surface-graphite text-on-surface border border-audit-border rounded px-3 py-2 focus:border-primary outline-none"><option value="">— Elegí un equipo —</option></select>
+<div id="rubrica-evidencia-contenido" class="mt-4 space-y-2"><p class="font-label-sm text-on-surface-variant">Seleccioná un equipo para ver su progreso y luego calificá con la rúbrica.</p></div>
+</div>
+<div class="lg:col-span-8 bg-surface-graphite border border-audit-border rounded p-6">
+<form id="form-rubrica" aria-labelledby="rubrica-titulo" class="space-y-6">
+<fieldset class="border-l-2 border-audit-border pl-4"><legend class="font-body-md font-bold">Uso de evidencia</legend><div class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Uso de evidencia — 1 a 4"><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer hover:border-primary"><input type="radio" name="uso_evidencia" value="1" required> 1 — Sin respaldo</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer hover:border-primary"><input type="radio" name="uso_evidencia" value="2"> 2 — Parcial</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer hover:border-primary"><input type="radio" name="uso_evidencia" value="3"> 3 — Adecuado</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer hover:border-primary"><input type="radio" name="uso_evidencia" value="4"> 4 — Ejemplar</label></div></fieldset>
+<fieldset class="border-l-2 border-audit-border pl-4"><legend class="font-body-md font-bold">Distinción dato vs. relato</legend><div class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Distinción dato vs relato — 1 a 4"><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="distincion_dato" value="1" required>1</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="distincion_dato" value="2">2</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="distincion_dato" value="3">3</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="distincion_dato" value="4">4</label></div></fieldset>
+<fieldset class="border-l-2 border-audit-border pl-4"><legend class="font-body-md font-bold">Pensamiento crítico</legend><div class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Pensamiento crítico — 1 a 4"><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="pensamiento_critico" value="1" required>1</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="pensamiento_critico" value="2">2</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="pensamiento_critico" value="3">3</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="pensamiento_critico" value="4">4</label></div></fieldset>
+<fieldset class="border-l-2 border-audit-border pl-4"><legend class="font-body-md font-bold">Trabajo en equipo</legend><div class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Trabajo en equipo — 1 a 4"><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="trabajo_equipo" value="1" required>1</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="trabajo_equipo" value="2">2</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="trabajo_equipo" value="3">3</label><label class="flex items-center gap-2 px-3 py-2 border border-audit-border cursor-pointer"><input type="radio" name="trabajo_equipo" value="4">4</label></div></fieldset>
+<div><label class="font-label-sm uppercase font-bold" for="rubrica-nota">Nota final</label><input id="rubrica-nota" name="nota_final" type="number" inputmode="decimal" min="0" max="10" step="0.01" aria-describedby="rubrica-nota-ayuda" class="mt-1 w-32 bg-surface-container-lowest border border-audit-border px-3 py-2 text-center focus:border-primary outline-none"><span id="rubrica-nota-ayuda" class="font-label-sm text-on-surface-variant ml-2">Opcional. Si vacío, se calcula desde rúbrica.</span></div>
+<div><label class="font-label-sm uppercase font-bold" for="rubrica-observaciones">Observaciones</label><textarea id="rubrica-observaciones" name="observaciones" aria-describedby="rubrica-observaciones-ayuda" rows="4" placeholder="Retroalimentación cualitativa…" class="mt-1 w-full bg-surface-container-lowest border border-audit-border px-3 py-2 focus:border-primary outline-none"></textarea><span id="rubrica-observaciones-ayuda" class="font-label-sm text-on-surface-variant">Visible para el equipo. Texto plano — textContent.</span></div>
+<button type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 hover:bg-primary hover:text-on-primary">Guardar calificación</button>
+</form>
+</div>
+</div>
+</section>
 
-      <form id="form-nomina" aria-labelledby="nomina-titulo">
-        <div class="campo">
-          <label class="campo__label" for="nomina-pegar">Pegar CSV</label>
-          <textarea id="nomina-pegar" aria-describedby="nomina-pegar-ayuda nomina-pegar-error" placeholder="Ana Pérez,ana.perez@monicaherrera.edu.sv,2024-001&#10;Carlos Gómez,carlos.gomez@gmail.com,2024-002" rows="6"></textarea>
-          <span class="campo__error" id="nomina-pegar-error" role="alert" aria-live="assertive"></span>
-        </div>
-        <div class="grupo-botones">
-          <button id="btn-cargar-nomina" class="btn btn--primario" type="submit">Cargar nómina</button>
-          <button id="btn-agregar-a-nomina" class="btn btn--ghost" type="button" aria-label="Agregar estudiante a la nómina">Agregar estudiante</button>
-        </div>
-      </form>
+<!-- CIERRE §9.1.14 -->
+<section id="sec-cierre" aria-labelledby="anonimizar-titulo" class="bg-surface-document text-text-on-document p-6 rounded border-l-4 border-error relative">
+<span class="absolute -top-2 -right-2 border-2 border-error text-error font-stamp-lg text-xs px-2 py-1 rotate-[-2deg] bg-surface-document" aria-hidden="true">CONFIDENCIAL</span>
+<h2 id="anonimizar-titulo" class="font-headline-md">Cierre y privacidad</h2><p class="font-body-md mt-2">Al cerrar el curso, anonimizá nombres y carnés. Irreversible, conserva desempeño.</p>
+<button id="btn-anonimizar" class="mt-4 border border-error text-error font-evidence-data uppercase px-6 py-3 hover:bg-error hover:text-on-error" aria-label="Anonimizar sesión">Anonimizar sesión</button>
+</section>
 
-      <div class="campo">
-        <table id="tabla-nomina">
-          <caption>Nómina cargada</caption>
-          <thead>
-            <tr>
-              <th scope="col">Nombre</th>
-              <th scope="col">Correo</th>
-              <th scope="col">Carné</th>
-              <th scope="col">Aviso</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Filas pintadas con textContent; correos no institucionales llevan ⚠ + aria-label="Correo no institucional" -->
-          </tbody>
-        </table>
-      </div>
-    </section>
+<!-- SUPER-ADMIN §9.1.15 -->
+<section id="consola-super-admin" aria-labelledby="consola-titulo" class="border border-primary bg-surface-container p-6" hidden>
+<h2 id="consola-titulo" class="font-headline-md text-primary">Consola de control / super-admin</h2><p class="font-label-sm text-on-surface-variant">Visible solo para fglopez@monicaherrera.edu.sv — listado de todas las sesiones/equipos.</p><div id="consola-contenido" class="mt-4 font-evidence-data text-sm"></div>
+</section>
 
-    <!-- Registrados sin equipo + Equipos -->
-    <section aria-labelledby="equipos-titulo">
-      <h2 id="equipos-titulo">Equipos y asignación</h2>
-      <p class="campo__ayuda">La asignación debe poder hacerse durante la clase. Un estudiante que llega sin equipo es el caso normal.</p>
-
-      <div class="campo">
-        <h3>Estudiantes sin equipo</h3>
-        <ul id="lista-registrados" role="list" aria-label="Estudiantes sin equipo">
-          <!-- Items: nombre + correo + carné (textContent) + botón asignar -->
-        </ul>
-      </div>
-
-      <div class="campo">
-        <div class="grupo-botones">
-          <h3 id="equipos-lista-titulo">Equipos de la sesión</h3>
-          <button id="btn-nuevo-equipo" class="btn btn--primario" type="button">Nuevo equipo</button>
-        </div>
-
-        <div id="lista-equipos" role="list" aria-label="Equipos">
-          <!-- Cada equipo: role="group" aria-labelledby="equipo-N-nombre" con integrantes y botones asignar/desasignar -->
-        </div>
-
-        <!-- Plantilla mínima para acciones de asignación — IDs requeridos por contrato para handlers -->
-        <div class="grupo-botones" aria-label="Acciones de asignación">
-          <button id="btn-asignar" class="btn btn--primario" type="button" aria-label="Asignar a equipo">Asignar</button>
-          <button id="btn-desasignar" class="btn btn--ghost" type="button" aria-label="Quitar de equipo">Desasignar</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Monitoreo en vivo -->
-    <section aria-labelledby="monitoreo-titulo">
-      <h2 id="monitoreo-titulo">Monitoreo en vivo</h2>
-      <div class="campo">
-        <table id="tabla-monitoreo">
-          <caption>Monitoreo en vivo</caption>
-          <thead>
-            <tr>
-              <th scope="col">Equipo</th>
-              <th scope="col">Integrantes</th>
-              <th scope="col">Resueltas</th>
-              <th scope="col">Intentos</th>
-              <th scope="col">Tiempo usado</th>
-              <th scope="col">Estado</th>
-            </tr>
-          </thead>
-          <tbody aria-live="polite" aria-atomic="false">
-            <!-- Filas desde v_desempeno; estados con texto + ícono, nunca solo color -->
-          </tbody>
-        </table>
-      </div>
-      <button id="btn-exportar-csv" class="btn btn--ghost" type="button" aria-label="Exportar desempeño a CSV" aria-describedby="export-ayuda">Exportar CSV</button>
-      <span class="campo__ayuda" id="export-ayuda">Descarga desempeño de v_desempeno: equipo, integrantes, resueltas, intentos, tiempo, motivo de fin.</span>
-    </section>
-
-    <!-- Rúbrica §5 — llenada a mano por docente -->
-    <section aria-labelledby="rubrica-titulo">
-      <h2 id="rubrica-titulo">Rúbrica y calificación</h2>
-      <form id="form-rubrica" aria-labelledby="rubrica-titulo">
-        <fieldset>
-          <legend>Uso de evidencia</legend>
-          <div class="grupo-botones" role="radiogroup" aria-label="Uso de evidencia — 1 a 4">
-            <label><input type="radio" name="uso_evidencia" value="1" required> 1 — Sin respaldo</label>
-            <label><input type="radio" name="uso_evidencia" value="2"> 2 — Parcial</label>
-            <label><input type="radio" name="uso_evidencia" value="3"> 3 — Adecuado</label>
-            <label><input type="radio" name="uso_evidencia" value="4"> 4 — Ejemplar</label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Distinción dato vs. relato</legend>
-          <div class="grupo-botones" role="radiogroup" aria-label="Distinción dato vs relato — 1 a 4">
-            <label><input type="radio" name="distincion_dato" value="1" required> 1</label>
-            <label><input type="radio" name="distincion_dato" value="2"> 2</label>
-            <label><input type="radio" name="distincion_dato" value="3"> 3</label>
-            <label><input type="radio" name="distincion_dato" value="4"> 4</label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Pensamiento crítico</legend>
-          <div class="grupo-botones" role="radiogroup" aria-label="Pensamiento crítico — 1 a 4">
-            <label><input type="radio" name="pensamiento_critico" value="1" required> 1</label>
-            <label><input type="radio" name="pensamiento_critico" value="2"> 2</label>
-            <label><input type="radio" name="pensamiento_critico" value="3"> 3</label>
-            <label><input type="radio" name="pensamiento_critico" value="4"> 4</label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Trabajo en equipo</legend>
-          <div class="grupo-botones" role="radiogroup" aria-label="Trabajo en equipo — 1 a 4">
-            <label><input type="radio" name="trabajo_equipo" value="1" required> 1</label>
-            <label><input type="radio" name="trabajo_equipo" value="2"> 2</label>
-            <label><input type="radio" name="trabajo_equipo" value="3"> 3</label>
-            <label><input type="radio" name="trabajo_equipo" value="4"> 4</label>
-          </div>
-        </fieldset>
-
-        <div class="campo">
-          <label class="campo__label" for="rubrica-nota">Nota final</label>
-          <input id="rubrica-nota" name="nota_final" type="number" inputmode="decimal" min="0" max="10" step="0.01" aria-describedby="rubrica-nota-ayuda">
-          <span class="campo__ayuda" id="rubrica-nota-ayuda">Opcional. Si se deja vacío, se calcula desde la rúbrica.</span>
-        </div>
-
-        <div class="campo">
-          <label class="campo__label" for="rubrica-observaciones">Observaciones</label>
-          <textarea id="rubrica-observaciones" name="observaciones" aria-describedby="rubrica-observaciones-ayuda" rows="4" placeholder="Retroalimentación cualitativa para el equipo…"></textarea>
-          <span class="campo__ayuda" id="rubrica-observaciones-ayuda">Visible para el equipo. Texto plano — se pinta con textContent.</span>
-        </div>
-
-        <button class="btn btn--primario" type="submit">Guardar calificación</button>
-      </form>
-    </section>
-
-    <!-- Anonimización — acción destructiva -->
-    <section aria-labelledby="anonimizar-titulo">
-      <h2 id="anonimizar-titulo">Cierre y privacidad</h2>
-      <p class="campo__ayuda">Al cerrar el curso, anonimizá nombres y carnés. La operación es irreversible y conserva el desempeño.</p>
-      <button id="btn-anonimizar" class="btn btn--ghost" type="button" aria-label="Anonimizar sesión">Anonimizar sesión</button>
-      <!-- Confirmación debe abrir role="alertdialog" aria-modal="true" con foco atrapado (lo crea js/docente.js) -->
-    </section>
-
-  </main>
-
-  <footer>
-    <div class="contenedor">
-      <p class="campo__ayuda">Datos personales: nómina visible solo por RLS del propio docente y del propio estudiante. Ver CONTRACT §14.3.</p>
-    </div>
-  </footer>
-
-  <script type="module" src="js/api.js"></script>
-  <script type="module" src="js/config.js"></script>
-  <script type="module" src="js/docente.js"></script>
-</body>
-</html>
+</div>
+</main>
+<div class="fixed bottom-0 left-0 md:left-[280px] right-0 h-8 bg-black border-t border-audit-border flex items-center px-4 justify-between z-50"><div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true"></span><span class="font-evidence-data text-xs text-primary uppercase">System: Online</span></div><span class="font-evidence-data text-xs text-on-surface-variant uppercase">Fragment ID: 0x8F9A2</span></div>
+<script type="module" src="js/api.js"></script>
+<script type="module" src="js/docente.js"></script>
+</body></html>

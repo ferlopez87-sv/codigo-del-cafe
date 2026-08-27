@@ -1,159 +1,179 @@
-<!DOCTYPE html>
-<html lang="es-SV">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="El Código del Café — escape room de auditoría de sostenibilidad CGC. Registro por código de un solo uso.">
-  <title>El Código del Café — Acceso</title>
-  <link rel="stylesheet" href="styles.css">
+<!DOCTYPE html><html class="dark" lang="es-SV"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta name="description" content="Misión: El código secreto del café — escape room de auditoría de sostenibilidad CGC. Acceso por OTP.">
+<title>Misión: El código secreto del café — Acceso</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#88d982","primary-fixed":"#a3f69c","on-primary":"#003909","primary-container":"#2e7d32","on-primary-container":"#cbffc2","background":"#131313","surface":"#131313","surface-graphite":"#1E1E1E","surface-document":"#F5F5DC","text-on-document":"#121212","audit-border":"#2C2F33","on-surface":"#e5e2e1","on-surface-variant":"#bfcaba","surface-container":"#201f1f","surface-container-high":"#2a2a2a","surface-container-low":"#1c1b1b","surface-container-lowest":"#0e0e0e","outline":"#8a9485","outline-variant":"#40493d","error":"#ffb4ab","error-container":"#93000a","on-error":"#690005","tertiary-container":"#cf2f2d"},spacing:{"card-padding":"20px","stack-gap":"12px","margin-main":"24px","sidebar-width":"280px","gutter-grid":"16px"},fontFamily:{"body-md":["Hanken Grotesk"],"headline-lg":["Hanken Grotesk"],"headline-md":["Hanken Grotesk"],"evidence-data":["JetBrains Mono"],"stamp-lg":["JetBrains Mono"],"label-sm":["JetBrains Mono"]},fontSize:{"body-md":["16px",{lineHeight:"24px",fontWeight:"400"}],"headline-lg":["32px",{lineHeight:"40px",letterSpacing:"-0.02em",fontWeight:"700"}],"headline-md":["24px",{lineHeight:"32px",fontWeight:"600"}],"evidence-data":["14px",{lineHeight:"20px",fontWeight:"500"}],"stamp-lg":["20px",{lineHeight:"24px",letterSpacing:"0.1em",fontWeight:"800"}],"label-sm":["12px",{lineHeight:"16px",fontWeight:"400"}]}}}}</script>
+<style>
+.view-state{display:none}.view-state.active{display:flex}.is-oculta{display:none!important}
+.crt-overlay{pointer-events:none;position:fixed;inset:0;background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,0.25) 50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06));background-size:100% 2px,3px 100%;z-index:100;opacity:0.12}
+.btn-primary{background:#1E1E1E;border:1px solid #88d982;color:#88d982;font-family:'JetBrains Mono',monospace;text-transform:uppercase;transition:all .2s}
+.btn-primary:hover{background:#2a2a2a;box-shadow:0 0 8px rgba(136,217,130,.2)}
+.btn-secondary{background:transparent;border:1px solid #40493d;color:#bfcaba;font-family:'JetBrains Mono',monospace;text-transform:uppercase;transition:all .2s}
+.btn-secondary:hover{border-color:#88d982;color:#88d982}
+.otp-single:focus{outline:none;border-color:#88d982;box-shadow:0 0 0 1px #88d982}
+:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+@media(prefers-reduced-motion:no-preference){*{scroll-behavior:smooth}}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style>
 </head>
-<body>
-  <!--
-    CONTRACT §14.4 — Sanitización: todo texto escrito por una persona se pinta con textContent.
-    Nunca usar innerHTML, insertAdjacentHTML ni outerHTML con datos de usuario.
-    innerHTML solo con literales del propio código.
-  -->
-  <a class="skip-link" href="#contenido-principal">Saltar al contenido</a>
+<body class="bg-background text-on-surface min-h-screen relative flex flex-col font-body-md overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
+<div class="crt-overlay" aria-hidden="true"></div>
+<div class="fixed inset-0 z-0 opacity-20 pointer-events-none" style="background-image:url('https://lh3.googleusercontent.com/aida-public/AB6AXuCeZ-yUQmq5cxWXT1GulNVcYB5E1lihLfSiNAh9ehxR3yhbIAWvRlyA_9nUbvMlc9cGTNlJoDZzrV_W4TqPYMUKKHsnfeveNbXDr89NnQEMl8gS19eIWyRaCRImR9pyV9DZnCSLixy96BYpqyiTDf-T92JG8M4_2YWuHCYncg43qccz4dyIVWKNUBQQU9tVS5xTYn9Vs7c5CL_Js351uasQ09tjP9XwkBurYQXpbCLz3IRpYzgfGO586w')"><div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent"></div></div>
+<a class="sr-only" href="#contenido-principal">Saltar al contenido</a>
 
-  <header>
-    <div class="contenedor">
-      <p class="badge badge--acento" aria-hidden="true">CGC · Expediente confidencial</p>
-      <h1>El Código del Café</h1>
-      <p>Auditoría de sostenibilidad — Cadena Global de Café</p>
-    </div>
-  </header>
+<main id="contenido-principal" class="relative z-10 flex-grow flex items-center justify-center p-4 w-full max-w-4xl mx-auto min-h-screen">
 
-  <main id="contenido-principal">
+<!-- PORTADA §9.1.1 -->
+<section class="view-state active flex-col items-center justify-center w-full text-center space-y-8" id="vista-portada" aria-labelledby="vista-portada-titulo">
+<div class="space-y-4">
+<div class="inline-flex items-center justify-center w-16 h-16 border border-audit-border rounded bg-surface-graphite shadow-md">
+<span class="material-symbols-outlined text-primary text-4xl" aria-hidden="true">fingerprint</span>
+</div>
+<h1 id="vista-portada-titulo" class="font-stamp-lg text-stamp-lg text-primary tracking-widest uppercase relative inline-block">
+Misión: El código secreto del café
+<div class="absolute -right-8 -top-4 rotate-[4deg] border-2 px-2 py-1 text-xs opacity-80" style="border-color:rgb(183,28,28);color:rgb(183,28,28)"><span class="font-stamp-lg text-xs block">CONFIDENCIAL</span></div>
+</h1>
+<p class="font-headline-md text-headline-md text-on-surface-variant max-w-2xl mx-auto">Una auditoría de sostenibilidad bajo presión — CGC, Cadena Global de Café.</p>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-xl mx-auto">La empresa publicó su informe. Tu equipo debe verificar si el discurso tiene respaldo en los datos. Cinco estaciones, un veredicto.</p>
+<div class="flex items-center justify-center gap-2 mt-2"><span class="h-[1px] w-12 bg-audit-border"></span><span class="font-label-sm text-label-sm text-outline uppercase tracking-widest">Protocolo de Acceso</span><span class="h-[1px] w-12 bg-audit-border"></span></div>
+</div>
+<div class="flex flex-col sm:flex-row gap-4 w-full max-w-md mx-auto">
+<a href="#vista-registro" class="btn-primary w-full py-3 px-6 rounded-none flex items-center justify-center gap-2 no-underline text-center"><span class="material-symbols-outlined text-sm" aria-hidden="true">how_to_reg</span>Registrarme</a>
+<a href="#vista-acceso" class="btn-secondary w-full py-3 px-6 rounded-none flex items-center justify-center gap-2 no-underline text-center"><span class="material-symbols-outlined text-sm" aria-hidden="true">login</span>Ya tengo cuenta — Acceder</a>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant max-w-md mx-auto">Necesitás estar en la nómina que cargó tu docente. Si tu correo no está en la lista, el sistema te avisará al verificar el código — nunca antes, para no filtrar quién está inscripto.</p>
+</section>
 
-    <!-- #vista-portada — portada pública, puerta al registro/acceso -->
-    <section id="vista-portada" aria-labelledby="vista-portada-titulo">
-      <h2 id="vista-portada-titulo">Un expediente, cinco estaciones, un veredicto</h2>
-      <p>La Cadena Global de Café publicó su informe de sostenibilidad. Tu equipo de auditoría debe verificar si el discurso tiene respaldo en los datos. El tiempo corre y el veredicto no se escribe solo.</p>
-      <div class="grupo-botones">
-        <a class="btn btn--primario" href="#vista-registro">Registrarme</a>
-        <a class="btn btn--ghost" href="#vista-acceso">Ya tengo cuenta — Acceder</a>
-      </div>
-      <p class="campo__ayuda">Necesitás estar en la nómina que cargó tu docente. Si tu correo no está en la lista, el sistema te avisará al verificar el código.</p>
-    </section>
+<!-- REGISTRO §9.1.2 -->
+<section class="view-state flex-col items-center justify-center w-full max-w-md mx-auto is-oculta" id="vista-registro" hidden aria-hidden="true" aria-labelledby="vista-registro-titulo">
+<div class="w-full bg-surface-document rounded shadow-[0_2px_8px_rgba(0,0,0,0.4)] p-8 relative border-t-4 border-primary">
+<div class="absolute top-2 left-2 flex gap-1" aria-hidden="true"><div class="w-2 h-2 rounded-full bg-audit-border opacity-50"></div><div class="w-2 h-2 rounded-full bg-audit-border opacity-50"></div></div>
+<div class="text-center mb-6"><h2 id="vista-registro-titulo" tabindex="-1" class="font-stamp-lg text-stamp-lg text-text-on-document uppercase tracking-widest border-b border-audit-border pb-2 inline-block">FICHA DE ACCESO</h2><p class="font-label-sm text-label-sm text-primary mt-2 uppercase">Solicitar acceso</p></div>
+<p class="font-body-md text-body-md text-text-on-document mb-4">Usá tu correo institucional. Tu nombre y carné los toma la nómina del docente.</p>
+<form id="form-registro" class="space-y-6" novalidate>
+<div class="space-y-2">
+<label class="block font-evidence-data text-evidence-data text-text-on-document uppercase font-bold" for="reg-correo">Correo institucional</label>
+<div class="relative"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" aria-hidden="true">mail</span>
+<input id="reg-correo" name="correo" type="email" autocomplete="email" required aria-required="true" aria-describedby="reg-correo-ayuda reg-correo-error" placeholder="tu.correo@monicaherrera.edu.sv" class="w-full bg-surface-graphite text-on-surface font-evidence-data text-evidence-data py-3 pl-10 pr-4 border border-audit-border rounded-none focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-on-surface-variant"></div>
+<span id="reg-correo-ayuda" class="font-label-sm text-label-sm text-text-on-document/60">Único campo de identidad. Debe coincidir con la nómina.</span>
+<span id="reg-correo-error" class="font-label-sm text-label-sm text-error block" role="alert" aria-live="assertive"></span>
+</div>
+<label class="flex items-start gap-3 cursor-pointer group mt-2">
+<span class="relative flex items-center justify-center mt-1"><input id="reg-privacidad" name="privacidad" type="checkbox" required aria-required="true" aria-describedby="aviso-privacidad" class="peer sr-only"><div class="w-5 h-5 border-2 border-audit-border rounded-none bg-surface-graphite peer-checked:bg-primary peer-checked:border-primary transition-colors flex items-center justify-center"><span class="material-symbols-outlined text-surface-graphite opacity-0 peer-checked:opacity-100 text-[18px]" aria-hidden="true">check</span></div></span>
+<span class="font-body-md text-body-md text-text-on-document group-hover:text-black">He leído y acepto el aviso de privacidad</span>
+</label>
+<details id="aviso-privacidad" open class="bg-surface-container-lowest p-4 border-l-2 border-primary"><summary class="font-evidence-data text-evidence-data text-text-on-document cursor-pointer">Aviso de privacidad — qué guardamos y por qué</summary><div class="font-body-md text-body-md text-text-on-document/80 mt-2 text-sm leading-relaxed"><p>Guardamos tu nombre, correo y carné tomados de la nómina, tu equipo, intentos y tiempo. Finalidad: gestionar la partida, mostrar progreso al docente y calificar. Base: actividad académica. Ven tus datos tu docente y tu equipo. Retención hasta anonimizar. Sin analítica ni terceros. Al registrarte aceptás este tratamiento.</p></div></details>
+<div class="pt-2 flex gap-4">
+<a href="#vista-portada" class="px-4 py-3 font-evidence-data uppercase text-sm text-text-on-document/60 hover:text-text-on-document border border-transparent hover:border-audit-border flex items-center justify-center">Cancelar</a>
+<button id="btn-registrar" type="submit" class="flex-1 btn-primary bg-surface-graphite py-3 px-6 rounded-none flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">send</span>Enviar código</button>
+</div>
+</form>
+<div class="mt-4 text-center"><a href="#vista-acceso" class="font-label-sm text-label-sm text-text-on-document/60 hover:text-text-on-document underline">Ya tengo código / ya me registré</a></div>
+</div>
+</section>
 
-    <!-- #vista-registro — único campo de identidad: correo -->
-    <section id="vista-registro" class="is-oculta" hidden aria-hidden="true" aria-labelledby="vista-registro-titulo">
-      <h2 id="vista-registro-titulo" tabindex="-1">Registro</h2>
-      <p class="campo__ayuda" id="reg-ayuda">Usá tu correo institucional. Tu nombre y carné los toma la nómina del docente, no lo que escribas aquí.</p>
+<!-- VERIFICAR CÓDIGO §9.1.3 -->
+<section class="view-state flex-col items-center justify-center w-full max-w-md mx-auto is-oculta" id="vista-codigo" hidden aria-hidden="true" aria-labelledby="vista-codigo-titulo">
+<div class="w-full bg-surface-graphite border border-audit-border p-8 shadow-[0_4px_16px_rgba(0,0,0,0.6)] relative">
+<div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-audit-border" aria-hidden="true"></div><div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-audit-border" aria-hidden="true"></div><div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-audit-border" aria-hidden="true"></div><div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-audit-border" aria-hidden="true"></div>
+<div class="flex items-center justify-between mb-6 pb-4 border-b border-audit-border">
+<div class="flex items-center gap-2 text-primary"><span class="material-symbols-outlined text-sm" aria-hidden="true">check_circle</span><span class="font-evidence-data text-evidence-data uppercase text-xs">1. Correo ✓</span></div>
+<div class="w-8 h-px bg-audit-border" aria-hidden="true"></div>
+<div class="flex items-center gap-2 text-on-surface"><span class="material-symbols-outlined text-sm" aria-hidden="true">key</span><span class="font-evidence-data text-evidence-data uppercase text-xs font-bold border-b border-primary pb-0.5">2. Verificación</span></div>
+</div>
+<header class="mb-6 text-center">
+<h2 id="vista-codigo-titulo" tabindex="-1" class="font-headline-lg text-headline-lg text-on-surface tracking-tight uppercase">Verificar acceso</h2>
+<p class="font-evidence-data text-evidence-data text-on-surface-variant leading-relaxed mt-2">Enviamos un código de 6 dígitos a tu correo. Revisá spam/promociones.</p>
+</header>
+<form id="form-codigo" class="flex flex-col gap-6 items-center w-full">
+<div class="w-full space-y-2">
+<label class="block font-evidence-data text-evidence-data text-on-surface uppercase text-sm" for="cod-token">Código de 6 dígitos</label>
+<input id="cod-token" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="cod-token-ayuda cod-token-error cuenta-reenvio" aria-invalid="false" placeholder="000000" class="otp-single w-full bg-surface-graphite border border-audit-border text-center text-2xl font-evidence-data text-primary rounded-none py-4 tracking-[0.4em]">
+<span id="cod-token-ayuda" class="font-label-sm text-label-sm text-on-surface-variant">El código vence en 5 minutos.</span>
+<span id="cod-token-error" class="font-evidence-data text-evidence-data text-error block" role="alert" aria-live="assertive"></span>
+</div>
+<div class="w-full flex flex-col gap-3">
+<button id="btn-verificar-codigo" type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-4 hover:bg-primary hover:text-on-primary transition-colors flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">lock_open</span>Verificar código</button>
+<button id="btn-reenviar-codigo" type="button" aria-describedby="cuenta-reenvio" class="w-full bg-transparent border border-audit-border text-on-surface-variant font-evidence-data uppercase py-3 hover:border-primary hover:text-primary transition-colors">Reenviar correo</button>
+<span id="cuenta-reenvio" class="font-label-sm text-label-sm text-on-surface-variant text-center block" role="status" aria-live="polite" aria-atomic="true">Podés reenviar en 45s</span>
+</div>
+</form>
+<p class="font-label-sm text-label-sm text-on-surface-variant text-center mt-4">Si hiciste clic en el enlace y no redirigió, copiá el código que aparece en el mismo correo. Si tu correo no está en la nómina, contactá a tu docente.</p>
+</div>
+</section>
 
-      <form id="form-registro" aria-labelledby="vista-registro-titulo" novalidate>
-        <div class="campo">
-          <label class="campo__label" for="reg-correo">Correo electrónico</label>
-          <input
-            id="reg-correo"
-            name="correo"
-            type="email"
-            autocomplete="email"
-            required
-            aria-required="true"
-            aria-describedby="reg-correo-ayuda reg-correo-error"
-            placeholder="tu.correo@monicaherrera.edu.sv"
-          >
-          <span class="campo__ayuda" id="reg-correo-ayuda">Único campo de identidad. Debe coincidir con la nómina.</span>
-          <span class="campo__error" id="reg-correo-error" role="alert" aria-live="assertive"></span>
-        </div>
+<!-- ACCESO EXISTENTE §9.1.4 -->
+<section class="view-state flex-col items-center justify-center w-full max-w-md mx-auto is-oculta" id="vista-acceso" hidden aria-hidden="true" aria-labelledby="vista-acceso-titulo">
+<div class="w-full bg-surface-document rounded shadow-[0_4px_16px_rgba(0,0,0,0.5)] border border-audit-border overflow-hidden relative">
+<div class="bg-surface-graphite p-4 border-b border-audit-border flex items-center justify-between"><div class="flex items-center gap-2 text-primary"><span class="material-symbols-outlined text-sm" aria-hidden="true">lock_open</span><span class="font-label-sm text-label-sm uppercase text-on-surface-variant">ID: ACCESO EXISTENTE</span></div><div class="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true"></div></div>
+<div class="p-8">
+<h2 id="vista-acceso-titulo" tabindex="-1" class="font-headline-md text-headline-md text-text-on-document mb-2 uppercase">Acceder a mi auditoría</h2>
 
-        <div class="campo">
-          <label for="reg-privacidad">
-            <input
-              id="reg-privacidad"
-              name="privacidad"
-              type="checkbox"
-              required
-              aria-required="true"
-              aria-describedby="aviso-privacidad"
-            >
-            He leído y acepto el aviso de privacidad
-          </label>
-        </div>
+<!-- Selector de modo de acceso (2026-08-26): código de equipo es la vía
+     principal para estudiantes (tu docente te lo da en clase); el correo
+     institucional sigue disponible para quien no tenga un código de equipo
+     (p. ej. el docente). Mismo #vista-acceso, sin pantalla nueva — §9. -->
+<div class="flex border-b border-audit-border mb-6" role="tablist" aria-label="Modo de acceso">
+<button type="button" id="tab-acceso-equipo" role="tab" aria-selected="true" aria-controls="modo-acceso-equipo" class="flex-1 py-2 font-evidence-data text-sm uppercase border-b-2 border-primary text-primary">Acceso de equipo</button>
+<button type="button" id="tab-acceso-correo" role="tab" aria-selected="false" aria-controls="modo-acceso-correo" class="flex-1 py-2 font-evidence-data text-sm uppercase border-b-2 border-transparent text-on-surface-variant hover:text-primary">Acceso por correo</button>
+</div>
 
-        <details id="aviso-privacidad" open>
-          <summary>Aviso de privacidad — qué guardamos y por qué</summary>
-          <div class="campo__ayuda">
-            <p>Guardamos tu nombre, correo y carné tomados de la nómina del curso, tu equipo asignado, tus intentos por estación y el tiempo usado. Finalidad: gestionar la partida del escape room, mostrar progreso al docente y calificar con la rúbrica del caso (§5). Base: ejecución de la actividad académica. Quién ve tus datos: tu docente y tu equipo; nadie más. Retención: hasta que el docente anonimice la sesión al cerrar el curso (<code>anonimizar_sesion</code>). Derechos: podés pedir acceso, corrección o eliminación a tu docente. Sin analítica ni terceros. Requiere conexión. Al registrarte aceptás este tratamiento.</p>
-          </div>
-        </details>
+<div id="modo-acceso-equipo" role="tabpanel">
+<p class="font-body-md text-body-md text-text-on-document/80 mb-6">Ingresa aquí el código de equipo enviado por tu docente</p>
+<form id="form-equipo-codigo" class="space-y-4" novalidate>
+<div class="relative">
+<label class="sr-only" for="eq-codigo">Código de equipo</label>
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true"><span class="material-symbols-outlined text-outline-variant text-sm">groups</span></div>
+<input id="eq-codigo" name="codigo" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" required aria-required="true" aria-describedby="eq-codigo-error" placeholder="Código de equipo (ej. SH9QG9)" class="w-full bg-surface-graphite text-on-surface font-evidence-data text-evidence-data uppercase tracking-widest border border-audit-border rounded py-3 pl-10 pr-4 focus:ring-1 focus:ring-primary focus:border-primary outline-none placeholder:text-outline-variant placeholder:normal-case placeholder:tracking-normal">
+</div>
+<span id="eq-codigo-error" class="font-label-sm text-label-sm text-error block" role="alert" aria-live="assertive"></span>
+<button id="btn-buscar-equipo" type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 px-4 rounded hover:bg-primary-container hover:text-on-primary-container transition-colors flex justify-center items-center gap-2"><span>Buscar equipo</span><span class="material-symbols-outlined text-sm" aria-hidden="true">search</span></button>
+</form>
+<div id="eq-resultado" hidden class="mt-4 space-y-3">
+<p class="font-label-sm text-label-sm uppercase text-on-surface-variant">Equipo: <span id="eq-nombre-equipo" class="text-text-on-document font-bold"></span> — ¿quién sos?</p>
+<ul id="eq-lista-integrantes" role="list" class="space-y-2"></ul>
+<button id="btn-eq-entrar" type="button" disabled class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 px-4 rounded hover:bg-primary-container hover:text-on-primary-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex justify-center items-center gap-2"><span>Entrar</span><span class="material-symbols-outlined text-sm" aria-hidden="true">login</span></button>
+</div>
+</div>
 
-        <button id="btn-registrar" class="btn btn--primario" type="submit">Registrarme y enviar código</button>
-      </form>
-    </section>
+<div id="modo-acceso-correo" role="tabpanel" hidden>
+<p class="font-body-md text-body-md text-text-on-document/80 mb-6">Ingresá tu correo y el código que te dio tu docente — de equipo o el código personal.</p>
+<form id="form-acceso" class="space-y-4" novalidate>
+<div class="relative">
+<label class="sr-only" for="acc-correo">Correo institucional</label>
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true"><span class="material-symbols-outlined text-outline-variant text-sm">mail</span></div>
+<input id="acc-correo" name="correo" type="email" autocomplete="email" required aria-required="true" aria-describedby="acc-correo-error" placeholder="Correo institucional" class="w-full bg-surface-graphite text-on-surface font-evidence-data text-evidence-data border border-audit-border rounded py-3 pl-10 pr-4 focus:ring-1 focus:ring-primary focus:border-primary outline-none placeholder:text-outline-variant">
+</div>
+<span id="acc-correo-error" class="font-label-sm text-label-sm text-error block" role="alert" aria-live="assertive"></span>
+<div class="relative">
+<label class="sr-only" for="acc-codigo">Código de acceso</label>
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true"><span class="material-symbols-outlined text-outline-variant text-sm">vpn_key</span></div>
+<input id="acc-codigo" name="codigo" type="text" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" required aria-required="true" aria-describedby="acc-codigo-error" placeholder="Código de equipo o personal" class="w-full bg-surface-graphite text-on-surface font-evidence-data text-evidence-data uppercase tracking-widest border border-audit-border rounded py-3 pl-10 pr-4 focus:ring-1 focus:ring-primary focus:border-primary outline-none placeholder:text-outline-variant placeholder:normal-case placeholder:tracking-normal">
+</div>
+<span id="acc-codigo-error" class="font-label-sm text-label-sm text-error block" role="alert" aria-live="assertive"></span>
+<div class="pt-4 flex flex-col gap-4">
+<button id="btn-acceder" type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 px-4 rounded hover:bg-primary-container hover:text-on-primary-container transition-colors flex justify-center items-center gap-2"><span>Entrar</span><span class="material-symbols-outlined text-sm" aria-hidden="true">login</span></button>
+<a href="#vista-registro" class="text-center font-evidence-data text-sm text-outline hover:text-primary underline underline-offset-4">No tengo código — registrarme por correo</a>
+</div>
+</form>
+</div>
+</div>
+<div class="h-1 w-full bg-audit-border"><div class="h-full bg-primary w-1/3" aria-hidden="true"></div></div>
+</div>
+</section>
 
-    <!-- #vista-codigo — verificación por enlace o código -->
-    <section id="vista-codigo" class="is-oculta" hidden aria-hidden="true" aria-labelledby="vista-codigo-titulo">
-      <h2 id="vista-codigo-titulo" tabindex="-1">Revisá tu correo</h2>
-      <p class="campo__ayuda" id="cod-token-ayuda">Te enviamos un correo con un <strong>enlace de acceso</strong> — hacé clic en el enlace del correo para entrar directamente. Si tu cliente de correo muestra además un código de 6 dígitos, también podés copiarlo abajo. Si no está en la nómina, el error aparece aquí al verificar.</p>
+</main>
 
-      <form id="form-codigo" aria-labelledby="vista-codigo-titulo">
-        <div class="campo">
-          <label class="campo__label" for="cod-token">Código de 6 dígitos (opcional si ya hiciste clic en el enlace)</label>
-          <input
-            id="cod-token"
-            name="token"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            pattern="[0-9]{6}"
-            maxlength="6"
-            aria-describedby="cod-token-ayuda cod-token-error cuenta-reenvio"
-            aria-invalid="false"
-            placeholder="000000"
-          >
-          <span class="campo__error" id="cod-token-error" role="alert" aria-live="assertive"></span>
-        </div>
+<div id="mensaje-auth" class="relative z-20 w-full max-w-md mx-auto px-4 pb-2" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
-        <div class="grupo-botones">
-          <button id="btn-verificar-codigo" class="btn btn--primario" type="submit">Verificar código</button>
-          <button id="btn-reenviar-codigo" class="btn btn--ghost" type="button" aria-describedby="cuenta-reenvio">Reenviar correo</button>
-        </div>
-        <span id="cuenta-reenvio" role="status" aria-live="polite" aria-atomic="true">Podés reenviar en 45s</span>
-      </form>
-      <p class="campo__ayuda">¿No te llegó? Revisá spam y la pestaña Promociones. Si hiciste clic en el enlace y no te redirigió, copiá el código que aparece en el mismo correo. Si tu correo no está en la nómina, contactá a tu docente.</p>
-    </section>
+<footer class="fixed bottom-0 w-full bg-surface-container-lowest border-t border-audit-border h-10 flex items-center px-4 justify-between z-50">
+<div class="font-evidence-data text-label-sm text-primary flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true"></span>SYS.STATUS: AWAITING_AUTH</div>
+<div class="font-evidence-data text-label-sm text-on-surface-variant opacity-50">SEC_LEVEL: ALPHA</div>
+</footer>
 
-    <!-- #vista-acceso — inicio de sesión para ya registrados -->
-    <section id="vista-acceso" class="is-oculta" hidden aria-hidden="true" aria-labelledby="vista-acceso-titulo">
-      <h2 id="vista-acceso-titulo" tabindex="-1">Acceder</h2>
-      <p class="campo__ayuda">Si ya te registraste, ingresá tu correo y te enviaremos un nuevo código.</p>
-
-      <form id="form-acceso" aria-labelledby="vista-acceso-titulo">
-        <div class="campo">
-          <label class="campo__label" for="acc-correo">Correo electrónico</label>
-          <input
-            id="acc-correo"
-            name="correo"
-            type="email"
-            autocomplete="email"
-            required
-            aria-required="true"
-            aria-describedby="acc-correo-ayuda acc-correo-error"
-            placeholder="tu.correo@monicaherrera.edu.sv"
-          >
-          <span class="campo__ayuda" id="acc-correo-ayuda">Te enviaremos un código de acceso.</span>
-          <span class="campo__error" id="acc-correo-error" role="alert" aria-live="assertive"></span>
-        </div>
-        <button id="btn-acceder" class="btn btn--primario" type="submit">Enviar código de acceso</button>
-      </form>
-    </section>
-
-    <!-- #mensaje-auth — errores y confirmaciones, assertive -->
-    <div id="mensaje-auth" role="alert" aria-live="assertive" aria-atomic="true"></div>
-
-  </main>
-
-  <footer>
-    <div class="contenedor">
-      <p class="campo__ayuda">Escuela de Comunicación Mónica Herrera · Carrera de Sostenibilidad · El Código del Café (CGC). Sin modo offline. Español de El Salvador, tono thriller de auditoría.</p>
-      <p class="campo__ayuda"><a href="#vista-portada">Portada</a> · <a href="#vista-registro">Registro</a> · <a href="#vista-acceso">Acceso</a></p>
-    </div>
-  </footer>
-
-  <script type="module" src="js/api.js"></script>
-  <script type="module" src="js/config.js"></script>
-  <script type="module" src="js/auth.js"></script>
-</body>
-</html>
+<script type="module" src="js/api.js"></script>
+<script type="module" src="js/auth.js"></script>
+</body></html>

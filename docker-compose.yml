@@ -1,12 +1,51 @@
 services:
-  scaperoom:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
+  db:
+    image: postgres:16-alpine
+    environment:
+      # CONTRACT §3.1: el rol que inicializa el clúster (POSTGRES_USER) queda
+      # SIEMPRE superusuario y dueño de las tablas — RLS jamás lo restringe,
+      # ni con FORCE ROW LEVEL SECURITY (los superusuarios lo saltan siempre,
+      # es una propiedad del rol, no del FORCE). Antes este archivo ponía acá
+      # mismo a `app_runtime`, lo que lo volvía superusuario/dueño y anulaba
+      # RLS en silencio para todo el sistema — bug real, encontrado al probar
+      # que un segundo docente veía sesiones ajenas (debía ver solo la suya).
+      # Por eso el bootstrap usa un nombre de administrador aparte; `app_runtime`
+      # se crea sin privilegios especiales en sql/00-roles.sql y es con quien
+      # se conecta el proceso Node (DATABASE_URL_APP, abajo).
+      POSTGRES_DB: ${POSTGRES_DB:-codigo_cafe}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres_admin_pw}
     volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
-      - ./juego.html:/usr/share/nginx/html/juego.html:ro
-      - ./docente.html:/usr/share/nginx/html/docente.html:ro
-      - ./styles.css:/usr/share/nginx/html/styles.css:ro
-      - ./js:/usr/share/nginx/html/js:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER:-postgres_admin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # puerto solo interno; descomenta para psql local
+    # ports:
+    #   - "5432:5432"
+
+  app:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # DATABASE_URL: solo para migraciones (sql/00→06), corridas a mano con
+      # `docker compose exec db psql -U postgres_admin ...` — el proceso
+      # Express NUNCA debe usar esta cadena en tiempo de ejecución.
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres_admin:postgres_admin_pw@db:5432/codigo_cafe}
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-postgres://app_runtime:app_runtime_pw@db:5432/codigo_cafe}
+      COOKIE_SECRET: ${COOKIE_SECRET:-cambia-este-secreto-en-produccion}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-onboarding@resend.dev}
+      DOMINIO_INSTITUCIONAL: ${DOMINIO_INSTITUCIONAL:-@monicaherrera.edu.sv}
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  pgdata:

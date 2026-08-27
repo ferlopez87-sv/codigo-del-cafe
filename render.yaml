@@ -1,25 +1,27 @@
+databases:
+  - name: codigo-del-cafe-db
+    plan: free
+    postgresMajorVersion: 16
+
 services:
   - type: web
     name: codigo-del-cafe
-    env: docker
+    env: node
     plan: free
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /
+    buildCommand: npm install
+    startCommand: node srv/index.js
+    healthCheckPath: /health
     autoDeploy: true
-    # variables opcionales (si querés sobreescribir Supabase sin tocar js/config.js)
-    # envVars:
-    #   - key: SUPABASE_URL
-    #     value: https://mdkbgjzvdwqcokuqdvvn.supabase.co
-    #   - key: SUPABASE_ANON_KEY
-    #     sync: false
-
-# Alternativa Static Site (sin Docker) — descomentá si preferís:
-# - type: web
-#   name: codigo-del-cafe-static
-#   env: static
-#   buildCommand: ""
-#   staticPublishPath: .
-#   routes:
-#     - type: rewrite
-#       source: /*
-#       destination: /index.html
+    envVars:
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: DOMINIO_INSTITUCIONAL
+        value: "@monicaherrera.edu.sv"
+      - key: NODE_ENV
+        value: production
