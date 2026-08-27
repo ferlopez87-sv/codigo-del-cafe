@@ -13,28 +13,43 @@
 -- opcional, para que RLS proteja de verdad.
 -- =============================================================================
 
+-- La creación puede fallar en un Postgres administrado (Render free) donde el
+-- usuario de la base no tiene CREATEROLE. No se aborta: se avisa y se sigue,
+-- porque 01..06 sirven igual. Lo que NO sirve igual es RLS — ver la nota al
+-- final de este archivo.
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'app_runtime') then
-    create role app_runtime login password 'app_runtime_pw';
+    begin
+      create role app_runtime login password 'app_runtime_pw';
+      raise notice '00-roles: app_runtime creado';
+    exception when insufficient_privilege then
+      raise warning '00-roles: sin permiso para CREATE ROLE — app_runtime NO existe. La app correrá como dueña de las tablas y RLS no la va a restringir (CONTRACT §3.1).';
+    end;
   end if;
 end $$;
 
-grant usage on schema public to app_runtime;
-grant select, insert, update, delete on all tables in schema public to app_runtime;
-grant usage, select on all sequences in schema public to app_runtime;
-grant execute on all functions in schema public to app_runtime;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'app_runtime') then
+    grant usage on schema public to app_runtime;
+    grant select, insert, update, delete on all tables in schema public to app_runtime;
+    grant usage, select on all sequences in schema public to app_runtime;
+    grant execute on all functions in schema public to app_runtime;
+  end if;
+end $$;
 
 -- Las tablas/funciones de 01→06 todavía no existen cuando esto corre (00 va
 -- primero) — sin esto, app_runtime se quedaría sin acceso a nada creado
 -- después. ALTER DEFAULT PRIVILEGES cubre lo que cree el rol de admin de
 -- acá en adelante en este esquema.
-alter default privileges in schema public grant select, insert, update, delete on tables to app_runtime;
-alter default privileges in schema public grant usage, select on sequences to app_runtime;
-alter default privileges in schema public grant execute on functions to app_runtime;
-
 do $$
 begin
-  raise notice '00-roles: app_runtime listo. superuser=%, cualquier tabla que cree = false (no crea tablas)',
-    (select rolsuper from pg_roles where rolname='app_runtime');
+  if exists (select 1 from pg_roles where rolname = 'app_runtime') then
+    alter default privileges in schema public grant select, insert, update, delete on tables to app_runtime;
+    alter default privileges in schema public grant usage, select on sequences to app_runtime;
+    alter default privileges in schema public grant execute on functions to app_runtime;
+    raise notice '00-roles: app_runtime listo (superuser=%)',
+      (select rolsuper from pg_roles where rolname='app_runtime');
+  end if;
 end $$;

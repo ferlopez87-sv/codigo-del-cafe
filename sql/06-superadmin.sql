@@ -59,13 +59,19 @@ create policy calificaciones_super_admin on calificaciones for all to public
 
 -- Confirmar que FORCE sigue activo tras agregar políticas (no debería
 -- desactivarse solo, pero se reafirma para que este archivo sea autocontenido).
+-- Mismo criterio que 02-rls: solo si el dueño es superusuario. Con un dueño
+-- común, FORCE deja ciegas a las funciones SECURITY DEFINER.
 do $$
-declare t text;
+declare
+  t text;
+  forzar boolean := (select rolsuper from pg_roles where rolname = current_user);
 begin
-  foreach t in array array['perfiles','sesiones','equipos','integrantes','nomina',
-                            'estaciones','intentos','progreso','calificaciones'] loop
-    execute format('alter table %I force row level security', t);
-  end loop;
+  if forzar then
+    foreach t in array array['perfiles','sesiones','equipos','integrantes','nomina',
+                              'estaciones','intentos','progreso','calificaciones'] loop
+      execute format('alter table %I force row level security', t);
+    end loop;
+  end if;
 end $$;
 
 do $$

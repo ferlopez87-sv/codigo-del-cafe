@@ -36,13 +36,21 @@ app.get('/', (req,res)=> res.sendFile(path.join(root,'index.html')));
 // SPA fallback (evita 404 en refresh de rutas con hash)
 app.use((req,res)=> res.status(404).json({ error:'no_encontrado' }));
 
-// Aplicar migraciones antes de escuchar
+function levantar(){
+  app.listen(PORT, ()=> console.log(`[srv] escuchando en :${PORT} — modo ${process.env.RESEND_API_KEY? 'online (Resend activo)':'local (OTP en log)'} — DB ${process.env.DATABASE_URL_APP? 'app_runtime':'? define DATABASE_URL_APP'}`));
+}
+
+// Migraciones antes de escuchar. Si algún .sql falla se levanta igual: sin
+// Shell en Render, un proceso muerto no deja leer nada más que el stack —
+// con el server arriba quedan los logs y /health para diagnosticar. Solo si
+// la base es inalcanzable (aplicarMigraciones rechaza) se corta.
 aplicarMigraciones().then(
-  () => {
-    app.listen(PORT, ()=> console.log(`[srv] escuchando en :${PORT} — modo ${process.env.RESEND_API_KEY? 'online (Resend activo)':'local (OTP en log)'} — DB ${process.env.DATABASE_URL_APP? 'app_runtime':'? define DATABASE_URL_APP'}`));
+  (r) => {
+    if(!r.ok) console.error('[srv] ⚠️  arrancando con migraciones incompletas — la app puede fallar');
+    levantar();
   },
   (err) => {
-    console.error('[srv] ❌ Error fatal en migraciones:', err.message);
+    console.error('[srv] ❌ no se pudo conectar a la base:', err.message);
     process.exit(1);
   }
 );

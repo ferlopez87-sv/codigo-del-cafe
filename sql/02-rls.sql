@@ -4,16 +4,27 @@
 -- =============================================================================
 
 create schema if not exists app;
--- app_runtime (sql/00-roles.sql) no es dueño de este esquema — sin este GRANT
--- explícito no puede ni ejecutar app.usuario_actual(), que es la base de
--- absolutamente todas las políticas de abajo.
-grant usage on schema app to app_runtime;
 
 create or replace function app.usuario_actual() returns uuid
 language sql stable as $$
   select nullif(current_setting('app.usuario_actual', true), '')::uuid
 $$;
-grant execute on function app.usuario_actual() to app_runtime;
+
+-- app_runtime (sql/00-roles.sql) no es dueño de este esquema — sin estos GRANT
+-- explícitos no puede ni ejecutar app.usuario_actual(), que es la base de
+-- absolutamente todas las políticas de abajo.
+-- Condicionados a que el rol exista: en Render el usuario de la base puede no
+-- tener CREATEROLE, y ahí 00-roles.sql no logra crearlo. Sin esta guarda, el
+-- archivo entero abortaba en la primera línea y no se creaba ninguna política.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'app_runtime') then
+    grant usage on schema app to app_runtime;
+    grant execute on function app.usuario_actual() to app_runtime;
+  else
+    raise notice '02-rls: app_runtime no existe — salto sus GRANT (ver 00-roles)';
+  end if;
+end $$;
 
 -- Helpers SECURITY DEFINER — evitan recursión de RLS al consultar otras tablas protegidas.
 create or replace function es_docente() returns boolean
@@ -63,21 +74,36 @@ $$;
 -- dueño de la tabla lo salta. En local, app_runtime suele ser también el
 -- dueño — ver nota en README/CONTRACT §6 sobre esta limitación de dev local.)
 -- -----------------------------------------------------------------------------
+-- FORCE solo si el dueño es superusuario (Docker local). Explicación:
+-- FORCE hace que RLS también aplique al DUEÑO de la tabla. En local el dueño
+-- es superusuario, y un superusuario saltea RLS pase lo que pase, así que
+-- FORCE es gratis y cubre el caso de que app_runtime terminara siendo dueño.
+-- En un Postgres administrado (Render) el dueño NO es superusuario, y ahí
+-- FORCE lo alcanza de verdad: rompe las funciones SECURITY DEFINER, que son
+-- dueñas-propietarias y necesitan leer las tablas deny-all (estaciones,
+-- docentes_autorizados). Medido: con FORCE, estaciones tiene 5 filas y
+-- devuelve 0 — sin error, en silencio. Ahí la protección NO la da FORCE sino
+-- conectar la app con un rol que no sea dueño (app_runtime, CONTRACT §3.1).
 do $$
-declare t text;
+declare
+  t text;
+  forzar boolean := (select rolsuper from pg_roles where rolname = current_user);
 begin
   foreach t in array array['perfiles','sesiones','equipos','integrantes','nomina',
-                            'estaciones','intentos','progreso','calificaciones'] loop
+                            'estaciones','intentos','progreso','calificaciones',
+                            'docentes_autorizados','configuracion'] loop
     execute format('alter table %I enable row level security', t);
-    execute format('alter table %I force row level security', t);
+    if forzar then
+      execute format('alter table %I force row level security', t);
+    else
+      execute format('alter table %I no force row level security', t);
+    end if;
   end loop;
-end $$;
 
--- docentes_autorizados / configuracion: RLS activo, cero políticas (deny by default)
-alter table docentes_autorizados enable row level security;
-alter table docentes_autorizados force row level security;
-alter table configuracion enable row level security;
-alter table configuracion force row level security;
+  if not forzar then
+    raise warning '02-rls: dueño (%) no es superusuario — RLS queda SIN force. La app DEBE conectarse con un rol que no sea dueño de las tablas o no habrá aislamiento (CONTRACT §3.1).', current_user;
+  end if;
+end $$;
 
 -- codigos_verificacion / sesiones_login: EXCEPCIÓN DOCUMENTADA (§2.1) — sin RLS,
 -- a propósito. Solo srv/rutas/auth.js y srv/middleware/sesion.js las tocan;
