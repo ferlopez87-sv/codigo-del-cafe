@@ -201,9 +201,25 @@ async function cargarConsolaSuperAdmin(){
 // en vivo, que ya se refresca solo cada 15s mientras hay sesión activa.
 function sincronizarBotonVerSesion(){
   const btn = $('btn-ver-sesion');
-  if(!btn) return;
-  if(sesionActivaId && sesionActivaEstado==='abierta') btn.removeAttribute('hidden');
-  else btn.setAttribute('hidden','');
+  if(btn){
+    if(sesionActivaId && sesionActivaEstado==='abierta') btn.removeAttribute('hidden');
+    else btn.setAttribute('hidden','');
+  }
+  // El estado de la sesión ya salía en la lista ("· borrador ·"), pero como
+  // dato suelto: no decía que en borrador los estudiantes NO pueden jugar.
+  // Desde el lado de ellos el síntoma era "la sesión ya fue cerrada por el
+  // docente", que manda a buscar el problema al lado equivocado. Este aviso
+  // va pegado a los botones, no en el banner de arriba de la página, porque
+  // ahí no se lee.
+  const aviso = $('sesion-aviso-estado');
+  if(!aviso) return;
+  const textos = {
+    borrador: 'Esta sesión está en borrador: tus estudiantes todavía no pueden jugar. Pulsá «Abrir sesión» cuando quieras que empiecen.',
+    cerrada:  'Esta sesión está cerrada: nadie puede seguir jugando. Podés volver a abrirla con «Abrir sesión».'
+  };
+  const texto = sesionActivaId ? textos[sesionActivaEstado] : null;
+  if(texto){ aviso.textContent = texto; aviso.removeAttribute('hidden'); }
+  else { aviso.textContent = ''; aviso.setAttribute('hidden',''); }
 }
 
 async function seleccionarSesion(id, estado){

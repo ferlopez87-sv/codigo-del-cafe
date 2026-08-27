@@ -167,7 +167,14 @@ begin
   select * into v_equipo from equipos where id = p_equipo;
   select * into v_sesion from sesiones where id = v_equipo.sesion_id;
 
-  if v_sesion.estado <> 'abierta' then
+  -- 'borrador' y 'cerrada' son situaciones opuestas y necesitan mensajes
+  -- distintos: una sesión que el docente todavía no abrió se reportaba como
+  -- "ya fue cerrada por el docente", que manda a buscar el problema al lado
+  -- equivocado. Además una es transitoria (esperá a que abra) y la otra es
+  -- terminal (no hay nada más que hacer).
+  if v_sesion.estado = 'borrador' then
+    return jsonb_build_object('error', 'sesion_no_abierta');
+  elsif v_sesion.estado <> 'abierta' then
     return jsonb_build_object('error', 'sesion_cerrada');
   end if;
 

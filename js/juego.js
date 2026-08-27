@@ -451,6 +451,7 @@ function mensajeErrorServidor(codigo) {
   switch (codigo) {
     case 'no_autorizado': return 'No estás autorizado para ver este equipo.';
     case 'sesion_cerrada': return 'La sesión ya fue cerrada por el docente.';
+    case 'sesion_no_abierta': return 'Tu docente todavía no abrió la sesión. Avisale y volvé a intentar — no hace falta recargar.';
     case 'tiempo_agotado': return 'Se agotó el tiempo de la sesión.';
     case 'bloqueada': return 'Esta estación sigue bloqueada. Resolvé las cuatro anteriores primero.';
     case 'estacion_invalida': return 'Estación no válida.';
