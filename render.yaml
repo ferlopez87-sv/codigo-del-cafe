@@ -25,3 +25,6 @@ services:
         value: "@monicaherrera.edu.sv"
       - key: NODE_ENV
         value: production
+      # NODE_VERSION (asegura que Render use Node moderno, necesario para import.meta)
+      - key: NODE_VERSION
+        value: "18.x"
