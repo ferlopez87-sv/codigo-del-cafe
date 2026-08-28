@@ -34,6 +34,11 @@ let estacionesCargando = null;
 // pedir nada nuevo al servidor — 2026-08-28, pedido de Fernando.
 let progresoEstacionesCache = [];
 
+// Última respuesta cruda de estado_juego() (§4.2) — guarda finalizado_en/
+// motivo_fin/iniciado_en, que progresoEstacionesCache no trae (solo trae el
+// arreglo de estaciones). Hace falta para pintarResumen() (Sala 5, cierre).
+let ultimoEstadoJuego = null;
+
 // Mapa de clases de estado admitidas por el contrato §7
 // Las 5 estaciones son fijas por contrato (inicializar_progreso las exige).
 const TOTAL_ESTACIONES = 5;
@@ -429,6 +434,17 @@ function mostrarSinEquipo() {
   if (sinEquipo) sinEquipo.removeAttribute('hidden');
 }
 
+// Puente Sala 5 → veredicto (§9 pantalla 7). Solo revela la sección con el
+// input del código maestro — texto-veredicto y bloque-ver-resumen siguen
+// ocultos hasta que verificarCodigoMaestro() confirme el código.
+function mostrarPantallaVeredicto() {
+  ocultarPantallasSuperiores();
+  const veredicto = $('pantalla-veredicto');
+  if (veredicto) veredicto.removeAttribute('hidden');
+  const h2 = $('veredicto-titulo');
+  if (h2) h2.focus();
+}
+
 function ocultarSinEquipo() {
   const el = $('sin-equipo');
   if (el) {
@@ -623,6 +639,7 @@ function pintarEstadoDesdeDatos(datos) {
     ? datos.resueltas
     : estaciones.filter((e) => e.estado === 'resuelta').length;
   progresoEstacionesCache = estaciones;
+  ultimoEstadoJuego = datos;
 
   pintarTarjetas(estaciones);
   pintarBarraProgreso(resueltas, 5);
@@ -817,12 +834,35 @@ function actualizarBotonSiguiente() {
   const btn = $('btn-siguiente-sala');
   if (!btn) return;
   const motivo = $('siguiente-sala-motivo');
+  const textoSpan = btn.querySelector('[data-rol="siguiente-texto"]');
+  if (textoSpan) textoSpan.textContent = 'Siguiente sala';
 
   const siguiente = estacionActual == null ? null : Number(estacionActual) + 1;
 
-  // En la Sala 5 no hay siguiente: el paso es el codigo maestro, que ya tiene
-  // su propia seccion. Mostrar un boton muerto ahi solo confunde.
+  // En la Sala 5 no hay "siguiente sala" — el paso es el veredicto (código
+  // maestro). Antes esta rama solo ocultaba el botón ("un botón muerto ahí
+  // solo confunde") pero nada más en todo el código revelaba #pantalla-
+  // veredicto: la sección con el input del código maestro se quedaba oculta
+  // para siempre y no había ninguna forma real de llegar a ella (encontrado
+  // probando en navegador, resolviendo las 5 salas de punta a punta — 2026-
+  // 08-28, pedido de Fernando de darle cierre a la Sala 5). Este botón, ya
+  // resuelta la Sala 5, se reutiliza como puente al veredicto.
   if (!siguiente || siguiente > TOTAL_ESTACIONES) {
+    if (Number(estacionActual) === TOTAL_ESTACIONES) {
+      const progreso5 = progresoEstacionesCache.find(
+        (p) => Number(p.estacion_id ?? p.id) === TOTAL_ESTACIONES
+      );
+      if (progreso5 && progreso5.estado === 'resuelta') {
+        setHidden(btn, false);
+        btn.dataset.destino = 'veredicto';
+        btn.disabled = false;
+        btn.removeAttribute('aria-disabled');
+        btn.setAttribute('aria-label', 'Ir al veredicto final');
+        if (textoSpan) textoSpan.textContent = 'Ir al veredicto';
+        setHidden(motivo, true);
+        return;
+      }
+    }
     setHidden(btn, true);
     setHidden(motivo, true);
     delete btn.dataset.destino;
@@ -1067,6 +1107,10 @@ export async function verificarCodigoMaestro(codigoRaw) {
       texto.removeAttribute('hidden');
       if (datos.veredicto) texto.textContent = datos.veredicto;
     }
+    // Puente al resumen final (§9 pantalla 8) — recién visible acá, junto con
+    // el veredicto, nunca antes de que el código maestro se haya aceptado.
+    const bloqueResumen = $('bloque-ver-resumen');
+    if (bloqueResumen) bloqueResumen.removeAttribute('hidden');
     window.dispatchEvent(new CustomEvent('juego:maestro-ok', { detail: datos }));
     return { ok: true, datos };
   }
@@ -1088,6 +1132,68 @@ function setFeedbackMaestro(texto, estado) {
   fb.textContent = texto;
   if (estado) fb.setAttribute('data-estado', estado);
   fb.removeAttribute('hidden');
+}
+
+// ---------------------------------------------------------------------------
+// 6. Resumen final (§9 pantalla 8) — existía en el HTML desde siempre pero
+// nada la llenaba ni la mostraba nunca (pedido de Fernando, 2026-08-28: dar
+// cierre real a la Sala 5). Todos los datos ya viajan en estado_juego(); acá
+// solo se pintan.
+// ---------------------------------------------------------------------------
+const MOTIVO_CIERRE_TEXTO = {
+  completado: 'Auditoría completada',
+  tiempo: 'Tiempo agotado',
+  cerrado: 'Cerrada por el docente',
+};
+
+function formatearDuracion(segundosTotales) {
+  const total = Math.max(0, Math.round(segundosTotales));
+  const min = Math.floor(total / 60);
+  const seg = total % 60;
+  return `${min} min ${String(seg).padStart(2, '0')} s`;
+}
+
+function pintarResumen() {
+  const datos = ultimoEstadoJuego || {};
+  const estaciones = progresoEstacionesCache || [];
+  const resueltas = estaciones.filter((e) => e.estado === 'resuelta').length;
+  const intentos = estaciones.reduce((acc, e) => acc + (Number(e.intentos) || 0), 0);
+
+  const elEquipo = $('resumen-equipo');
+  if (elEquipo) elEquipo.textContent = (equipoActual && equipoActual.nombre) || '—';
+
+  const elResueltas = $('resumen-resueltas');
+  if (elResueltas) elResueltas.textContent = `${resueltas} / ${TOTAL_ESTACIONES}`;
+
+  const elIntentos = $('resumen-intentos');
+  if (elIntentos) elIntentos.textContent = String(intentos);
+
+  const elTiempo = $('resumen-tiempo');
+  if (elTiempo) {
+    const inicioMs = datos.iniciado_en ? new Date(datos.iniciado_en).getTime() : null;
+    const finMs = datos.finalizado_en ? new Date(datos.finalizado_en).getTime() : Date.now();
+    elTiempo.textContent = inicioMs ? formatearDuracion((finMs - inicioMs) / 1000) : '—';
+  }
+
+  const elMotivo = $('resumen-motivo');
+  if (elMotivo) elMotivo.textContent = MOTIVO_CIERRE_TEXTO[datos.motivo_fin] || datos.motivo_fin || '—';
+}
+
+async function mostrarResumenFinal() {
+  // Refresca antes de pintar: verificar_maestro() acaba de sellar
+  // finalizado_en/motivo_fin en el servidor, y ultimoEstadoJuego todavía
+  // trae el estado de ANTES de resolver la Sala 5 (verificar_maestro no
+  // devuelve esos campos, solo ok/veredicto) — sin este refresh, el resumen
+  // mostraría "—" en tiempo usado y motivo de cierre.
+  const equipoId = equipoActual && equipoActual.id;
+  if (equipoId) await cargarEstado(equipoId);
+
+  pintarResumen();
+  ocultarPantallasSuperiores();
+  const resumen = $('pantalla-resumen');
+  if (resumen) resumen.removeAttribute('hidden');
+  const h2 = $('resumen-titulo');
+  if (h2) h2.focus();
 }
 
 // ---------------------------------------------------------------------------
@@ -1178,6 +1284,7 @@ function enlazarEventosUnaVez() {
   const btnSiguiente = $('btn-siguiente-sala');
   if (btnSiguiente) btnSiguiente.addEventListener('click', () => {
     if (btnSiguiente.disabled || btnSiguiente.getAttribute('aria-disabled') === 'true') return;
+    if (btnSiguiente.dataset.destino === 'veredicto') { mostrarPantallaVeredicto(); return; }
     const destino = Number(btnSiguiente.dataset.destino);
     if (Number.isInteger(destino)) seleccionarSala(destino);
   });
@@ -1195,6 +1302,10 @@ function enlazarEventosUnaVez() {
       }
     });
   }
+
+  // Resumen final (§9 pantalla 8) — puente desde el veredicto
+  const btnVerResumen = $('btn-ver-resumen');
+  if (btnVerResumen) btnVerResumen.addEventListener('click', () => mostrarResumenFinal());
 
   // cl-timer (§7): cuando el cronómetro server-authoritative llega a 0, mostrar
   // el mismo mensaje/estado que usa el error "tiempo_agotado" que ya devuelve
