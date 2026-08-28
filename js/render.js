@@ -427,28 +427,74 @@ function _renderNumero(contenedor, interaccion) {
       else clave = 'opcion';
     }
 
-    const wrap = _mk('div');
-    const label = _mk('label');
-    const selId = 'campo-' + clave;
-    label.setAttribute('for', selId);
-    label.textContent = String(pregunta || 'Seleccioná una opción');
+    const preguntaTexto = String(pregunta || 'Seleccioná una opción');
+    // 2026-08-28, reportado por Fernando en Sala del Dinero: un <select>
+    // nativo no hace wrap del texto de sus <option> — con frases completas
+    // (no "sí"/"no" cortos) el popup queda tan angosto como la caja cerrada
+    // y el texto no se alcanza a leer, sin importar cuánto se ensanche el
+    // <select> mismo. Con opciones largas se arma un grupo de radios en su
+    // lugar: cada opción es su propio bloque, que sí puede partirse en
+    // varias líneas — mismo patrón que el picker de equipo (js/auth.js).
+    const opcionesLargas = opciones.some((op) => String(op.texto ?? '').length > 60);
 
-    const sel = _mk('select');
-    sel.id = selId;
-    const ph = _mk('option', { value: '' }, '-- Seleccioná --');
-    sel.appendChild(ph);
-    opciones.forEach((op) => {
-      const o = _mk('option');
-      o.value = _norm(op.id);
-      o.textContent = String(op.texto ?? '');
-      sel.appendChild(o);
-    });
-    wrap.appendChild(label);
-    wrap.appendChild(sel);
-    contenedor.appendChild(wrap);
-    _estado.refs[clave] = sel;
-    _estado.refs.juicio = sel;
-    _estado.refs._numeroClave = clave;
+    if (opcionesLargas) {
+      const fs = _mk('fieldset');
+      const legend = _mk('legend');
+      legend.textContent = preguntaTexto;
+      fs.appendChild(legend);
+      const nombreGrupo = 'grupo-' + clave;
+      const radios = [];
+      opciones.forEach((op) => {
+        const fila = _mk('label', { class: 'flex items-start gap-3 p-3 mb-2 border border-audit-border rounded cursor-pointer hover:border-primary' });
+        const radio = _mk('input');
+        radio.type = 'radio';
+        radio.name = nombreGrupo;
+        radio.value = _norm(op.id);
+        radio.style.minWidth = '20px';
+        radio.style.minHeight = '20px';
+        radio.style.marginTop = '2px';
+        radio.style.flexShrink = '0';
+        const texto = _mk('span', null, String(op.texto ?? ''));
+        fila.appendChild(radio);
+        fila.appendChild(texto);
+        fs.appendChild(fila);
+        radios.push(radio);
+      });
+      contenedor.appendChild(fs);
+      // .value delega al radio marcado — serializarRespuesta() más abajo lee
+      // sel.value sin saber si es un <select> o este objeto; no hace falta
+      // tocar esa lógica.
+      const refValor = { get value() {
+        const marcado = radios.find((r) => r.checked);
+        return marcado ? marcado.value : '';
+      } };
+      _estado.refs[clave] = refValor;
+      _estado.refs.juicio = refValor;
+      _estado.refs._numeroClave = clave;
+    } else {
+      const wrap = _mk('div');
+      const label = _mk('label');
+      const selId = 'campo-' + clave;
+      label.setAttribute('for', selId);
+      label.textContent = preguntaTexto;
+
+      const sel = _mk('select');
+      sel.id = selId;
+      const ph = _mk('option', { value: '' }, '-- Seleccioná --');
+      sel.appendChild(ph);
+      opciones.forEach((op) => {
+        const o = _mk('option');
+        o.value = _norm(op.id);
+        o.textContent = String(op.texto ?? '');
+        sel.appendChild(o);
+      });
+      wrap.appendChild(label);
+      wrap.appendChild(sel);
+      contenedor.appendChild(wrap);
+      _estado.refs[clave] = sel;
+      _estado.refs.juicio = sel;
+      _estado.refs._numeroClave = clave;
+    }
   }
 
   // ── Dataviz §16.2 — SVG inline accesible (inyectado al inicio del contenedor)

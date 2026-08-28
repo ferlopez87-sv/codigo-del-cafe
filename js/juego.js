@@ -27,6 +27,13 @@ let perfilActual = null; // { id, nombre, correo, carne, rol } de Auth.sesion() 
 let estacionesCache = null;
 let estacionesCargando = null;
 
+// Progreso por sala (estado_juego(), §4.2) — a diferencia de estacionesCache
+// esto SÍ cambia durante la partida (intentos, resuelta/no) y se refresca en
+// cada cargarEstado(). Se guarda acá para que pintarEstacionEnPanel() pueda
+// mostrar de nuevo el mensaje de confirmación de una sala ya resuelta sin
+// pedir nada nuevo al servidor — 2026-08-28, pedido de Fernando.
+let progresoEstacionesCache = [];
+
 // Mapa de clases de estado admitidas por el contrato §7
 // Las 5 estaciones son fijas por contrato (inicializar_progreso las exige).
 const TOTAL_ESTACIONES = 5;
@@ -258,6 +265,26 @@ async function pintarEstacionEnPanel(id) {
   if (datosEl) pintarDatosEstacion(datosEl, estacion.datos);
 
   pintarRetoEstacion(estacion.reto);
+
+  // 2026-08-28, pedido de Fernando: el mensaje de confirmación de una sala ya
+  // resuelta debe seguir visible al volver a entrar, no solo justo después de
+  // acertar. estaciones_publicas (estacionesCache) nunca trae feedback_ok
+  // -adrede, para que nadie vea el código de una sala sin resolverla-, así
+  // que se busca en progresoEstacionesCache (estado_juego(), que sí lo revela
+  // una vez resuelta). Si la sala NO está resuelta se limpia cualquier
+  // mensaje que haya quedado de la sala anterior — antes nada lo tocaba acá,
+  // así que el feedback de una sala podía seguir pegado al panel de otra.
+  const progreso = progresoEstacionesCache.find((p) => Number(p.estacion_id ?? p.id) === Number(id));
+  const fb = $('estacion-feedback');
+  if (progreso && progreso.estado === 'resuelta' && progreso.feedback) {
+    mostrarFeedbackEstacion(progreso.feedback, 'ok', progreso.intentos != null ? `Intento ${progreso.intentos}` : null);
+  } else if (fb) {
+    while (fb.firstChild) fb.removeChild(fb.firstChild);
+    fb.setAttribute('hidden', '');
+    fb.removeAttribute('data-estado');
+    const intentosEl = $('estacion-intentos');
+    if (intentosEl) intentosEl.textContent = '';
+  }
 
   const interaccionEl = $('estacion-interaccion');
   if (interaccionEl) {
@@ -595,6 +622,7 @@ function pintarEstadoDesdeDatos(datos) {
   const resueltas = typeof datos.resueltas === 'number'
     ? datos.resueltas
     : estaciones.filter((e) => e.estado === 'resuelta').length;
+  progresoEstacionesCache = estaciones;
 
   pintarTarjetas(estaciones);
   pintarBarraProgreso(resueltas, 5);
@@ -957,7 +985,11 @@ function mensajeDetalle(detalle) {
 function mostrarFeedbackEstacion(texto, estado, intentosTexto) {
   const fb = $('estacion-feedback');
   if (!fb) return;
-  fb.textContent = texto;
+  // Mismo reconocimiento de <b> que narrativa/datos (_pintarConNegritas) —
+  // el mensaje de confirmación (feedback_ok) también puede traer negrita,
+  // ej. el "Código: X" que hace falta para la Sala 5.
+  while (fb.firstChild) fb.removeChild(fb.firstChild);
+  _pintarConNegritas(fb, texto);
   fb.setAttribute('role', 'status');
   fb.setAttribute('aria-live', 'polite');
   fb.setAttribute('aria-atomic', 'true');

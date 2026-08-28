@@ -139,10 +139,17 @@ begin
     -- datos.estaciones, no datos.progreso — alinear acá, no en el cliente).
     -- 'codigo' solo viaja si ya está resuelta (pintarFragmentos, §4.2): el
     -- cliente nunca debe recibir el fragmento de una estación sin resolver.
+    -- 'feedback' (2026-08-28, pedido de Fernando): mismo criterio — solo con
+    -- la estación resuelta, para que al reabrir una sala ya resuelta el panel
+    -- pueda mostrar de nuevo su mensaje de confirmación sin tener que volver
+    -- a "Verificar". Antes esto no viajaba acá y el panel se quedaba mudo al
+    -- revisitar una sala ya resuelta (el mensaje solo se veía una vez, justo
+    -- después de acertar).
     'estaciones', coalesce((
       select jsonb_agg(jsonb_build_object(
         'estacion_id', pr.estacion_id, 'id', pr.estacion_id, 'estado', pr.estado, 'intentos', pr.intentos,
-        'codigo', case when pr.estado = 'resuelta' then e.codigo else null end
+        'codigo', case when pr.estado = 'resuelta' then e.codigo else null end,
+        'feedback', case when pr.estado = 'resuelta' then e.feedback_ok else null end
       ) order by pr.estacion_id)
       from progreso pr join estaciones e on e.id = pr.estacion_id
       where pr.equipo_id = p_equipo
