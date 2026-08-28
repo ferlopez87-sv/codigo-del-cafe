@@ -45,6 +45,13 @@ body{background:#121212;color:#e5e2e1}
 #aviso-solo-apuntador{border:1px solid #ffb4ac;background:rgba(255,180,172,.1);color:#ffb4ac;padding:10px 12px;display:flex;gap:8px;align-items:center}
 #aviso-conexion[hidden],#aviso-solo-apuntador[hidden]{display:none}
 #pantalla-veredicto[hidden],#pantalla-resumen[hidden]{display:none}
+/* Mismo caso: #pantalla-dashboard lleva .flex de Tailwind, así que sin esto
+   el tablero seguía pintado detrás del veredicto/resumen aunque tuviera
+   `hidden` — nunca se notó porque, hasta este cambio, no había forma real
+   de llegar a esas dos pantallas desde la Sala 5 (ver js/juego.js,
+   mostrarPantallaVeredicto). 2026-08-28, encontrado probando el cierre
+   completo en navegador real, no leyendo el código. */
+#pantalla-dashboard[hidden]{display:none}
 /* `hidden` es regla de la hoja del navegador: cualquier clase con display la
    gana. El boton lleva .flex de Tailwind, asi que sin esto seguia visible en
    la Sala 5, donde no hay sala siguiente. Mismo caso que los avisos de arriba. */
@@ -236,6 +243,7 @@ body{background:#121212;color:#e5e2e1}
 </div>
 <div id="feedback-maestro" hidden role="status" aria-live="polite" aria-atomic="true" class="mt-3 p-3 border border-audit-border font-evidence-data"></div>
 <div id="texto-veredicto" hidden class="mt-6 bg-surface-document text-text-on-document p-6 rounded border-l-4 border-primary"><h3 class="font-headline-md">Veredicto</h3><p class="font-body-md mt-2">El discurso de CGC no está respaldado por la evidencia del expediente. El informe muestra brechas en trazabilidad, agua, reparto de valor y reconocimiento del cuidado. Un veredicto sólido cita el dato que lo sustenta — revisá el feedback de cada estación.</p></div>
+<div id="bloque-ver-resumen" hidden class="mt-6"><button id="btn-ver-resumen" type="button" class="border border-audit-border text-on-surface-variant px-6 py-3 font-evidence-data uppercase hover:border-primary hover:text-primary">Ver resumen final</button></div>
 </section>
 
 <!-- Resumen §9.1.8 -->
