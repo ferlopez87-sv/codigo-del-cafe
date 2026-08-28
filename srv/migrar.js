@@ -14,7 +14,7 @@
 // decorativas. Por eso al final se audita contra la base y se avisa.
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import pg from 'pg';
 import { pool } from './db.js';
 import { hashCodigo } from './email.js';
@@ -246,7 +246,16 @@ export async function aplicarMigraciones() {
 }
 
 // Permite correrlo suelto también: `node srv/migrar.js`
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// La comparación va contra pathToFileURL(argv[1]), no contra `file://` + la
+// ruta cruda. argv[1] llega tal cual lo escribió quien invoca — normalmente
+// relativo ("srv/migrar.js") — y aunque sea absoluto, una URL codifica espacios
+// y acentos (%20, %C3%B3). Este proyecto vive en ".../My Drive/Escuela Mónica
+// Herrera/...", así que las dos cadenas no coincidían nunca: `npm run migrar`
+// no hacía nada y salía con código 0, como si hubiera migrado. En Render no se
+// notaba porque ahí la ruta es /app y el servidor llama a aplicarMigraciones()
+// al arrancar, sin pasar por esta guarda.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   aplicarMigraciones()
     .then(r => pool.end().then(() => process.exit(r.ok ? 0 : 1)))
     .catch(err => { console.error('[migrar] error fatal:', err); pool.end().then(() => process.exit(1)); });

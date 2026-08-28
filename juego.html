@@ -7,6 +7,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500;800&display=swap" rel="stylesheet">
 <script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#88d982","primary-fixed":"#a3f69c","on-primary":"#003909","primary-container":"#2e7d32","on-primary-container":"#cbffc2","background":"#131313","surface":"#131313","surface-graphite":"#1E1E1E","surface-document":"#F5F5DC","text-on-document":"#121212","audit-border":"#2C2F33","on-surface":"#e5e2e1","on-surface-variant":"#bfcaba","surface-container":"#201f1f","surface-container-high":"#2a2a2a","surface-container-low":"#1c1b1b","surface-container-lowest":"#0e0e0e","outline":"#8a9485","outline-variant":"#40493d","error":"#ffb4ab","error-container":"#93000a","surface-variant":"#353534"},spacing:{"card-padding":"20px","stack-gap":"12px","margin-main":"24px","sidebar-width":"280px","gutter-grid":"16px"},fontFamily:{"body-md":["Hanken Grotesk"],"headline-lg":["Hanken Grotesk"],"headline-md":["Hanken Grotesk"],"evidence-data":["JetBrains Mono"],"stamp-lg":["JetBrains Mono"],"label-sm":["JetBrains Mono"]},fontSize:{"body-md":["16px",{lineHeight:"24px",fontWeight:"400"}],"headline-lg":["32px",{lineHeight:"40px",letterSpacing:"-0.02em",fontWeight:"700"}],"headline-md":["24px",{lineHeight:"32px",fontWeight:"600"}],"evidence-data":["14px",{lineHeight:"20px",fontWeight:"500"}],"stamp-lg":["20px",{lineHeight:"24px",letterSpacing:"0.1em",fontWeight:"800"}],"label-sm":["12px",{lineHeight:"16px",fontWeight:"400"}]}}}}</script>
 <style>
+/* La pagina es SIEMPRE oscura (nunca sigue el tema del SO): sin esto, el
+   navegador dibuja los controles que el resta CSS no puede tocar -- el
+   popup nativo del <select>, scrollbars -- con su tema CLARO por defecto.
+   Asi el select de E1 quedaba con nuestro texto claro (#e5e2e1) sobre un
+   fondo casi blanco elegido por el sistema operativo, no por esta hoja:
+   'letra muy clara' era exactamente ese choque, invisible leyendo el CSS
+   porque el color de la CAJA CERRADA si se ve bien -- el popup ABIERTO es
+   el que usa el widget nativo. */
+html{color-scheme:dark}
 body{background:#121212;color:#e5e2e1}
 .evidence-card{box-shadow:0 2px 8px rgba(0,0,0,.4);border:1px solid #2C2F33}
 .stamp-solved{border:2px solid #88d982;color:#88d982;transform:rotate(-2deg);background:rgba(136,217,130,.1)}
@@ -19,11 +28,92 @@ body{background:#121212;color:#e5e2e1}
 #aviso-solo-apuntador{border:1px solid #ffb4ac;background:rgba(255,180,172,.1);color:#ffb4ac;padding:10px 12px;display:flex;gap:8px;align-items:center}
 #aviso-conexion[hidden],#aviso-solo-apuntador[hidden]{display:none}
 #pantalla-veredicto[hidden],#pantalla-resumen[hidden]{display:none}
+/* `hidden` es regla de la hoja del navegador: cualquier clase con display la
+   gana. El boton lleva .flex de Tailwind, asi que sin esto seguia visible en
+   la Sala 5, donde no hay sala siguiente. Mismo caso que los avisos de arriba. */
+#btn-siguiente-sala[hidden],#siguiente-sala-motivo[hidden]{display:none}
 .nav-sala.is-pendiente{border-left:3px solid transparent}
 .nav-sala.is-progreso{border-left:3px solid #88d982}
 .nav-sala.is-resuelta{border-left:3px solid #88d982;background:rgba(136,217,130,.08)}
 .nav-sala.is-bloqueada{opacity:.5;pointer-events:none}
 @media(prefers-reduced-motion:no-preference){*{scroll-behavior:smooth}}
+
+/* ── Tablero de orden E1 ──────────────────────────────────────────────────
+   Seis casillas numeradas + bandeja. Reemplaza la lista con botones arriba/
+   abajo: la posicion 6 ahora es una casilla real y visible, que es lo que se
+   le pide leer al estudiante. Dos caminos sobre el mismo DOM — arrastrar y
+   teclado — asi que cada estado tiene que verse sin depender del puntero. */
+.orden-zona{display:grid;gap:16px;margin-bottom:24px}
+.orden-ayuda{margin:0;font-size:12px;line-height:1.5;color:#bfcaba;border-left:2px solid #40493d;padding-left:12px}
+
+.orden-casillas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+@media(min-width:560px){.orden-casillas{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:900px){.orden-casillas{grid-template-columns:repeat(6,minmax(0,1fr))}}
+
+.orden-casilla{position:relative;display:flex;align-items:center;justify-content:center;min-height:88px;padding:20px 8px 8px;background:#131313;border:1px dashed #6a716b;cursor:pointer}
+.orden-casilla__num{position:absolute;top:4px;left:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1;color:#8a9485}
+.orden-casilla[data-ocupada="true"]{border-style:solid;background:#1E1E1E}
+.orden-casilla[data-ocupada="true"] .orden-casilla__num{color:#88d982}
+/* Destino activo: borde solido + grosor + relleno, nunca solo color (a11y) */
+.orden-casilla.is-sobre,.orden-bandeja.is-sobre{border-style:solid;border-color:#88d982;border-width:2px;background:rgba(136,217,130,.1)}
+.orden-casilla:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+
+.orden-tarjeta{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:8px 12px;font-family:'Hanken Grotesk',sans-serif;font-size:14px;line-height:1.3;color:#e5e2e1;background:#1E1E1E;border:1px solid #6a716b;box-shadow:0 1px 2px rgba(0,0,0,.45);cursor:grab;user-select:none}
+.orden-casilla .orden-tarjeta{width:100%;height:100%}
+.orden-tarjeta:hover{border-color:#88d982}
+.orden-tarjeta:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+.orden-tarjeta.is-arrastrando{opacity:.4;cursor:grabbing}
+/* Levantada por teclado: el anillo es el unico indicio de que la tarjeta esta
+   "en la mano", porque no hay puntero que la acompanie. */
+.orden-tarjeta.is-levantada{border-color:#88d982;border-style:dashed;box-shadow:0 0 0 2px #88d982,0 4px 12px rgba(0,0,0,.5)}
+
+.orden-bandeja{display:flex;flex-wrap:wrap;gap:8px;min-height:60px;padding:12px;background:#1a1a1a;border:1px dashed #6a716b}
+.orden-bandeja[data-vacia="true"]::after{content:"Todas las tarjetas est\00E1n colocadas.";font-size:12px;color:#8a9485;align-self:center}
+.orden-zona--colocando .orden-casilla{border-color:#88d982}
+
+/* Quien no es apuntador/a lee el tablero pero no lo mueve. Son div/li: no
+   existe `disabled` para ellos, asi que el bloqueo va por aria-disabled. */
+.orden-tarjeta[aria-disabled="true"],.orden-casilla[aria-disabled="true"]{opacity:.6;cursor:not-allowed;pointer-events:none}
+
+/* Pregunta + selector del eslabon. Aire y regla divisoria: el tablero y la
+   pregunta son dos tareas distintas de la misma estacion y se leian pegadas
+   como si fueran una sola. */
+.orden-pregunta{display:grid;gap:8px;margin-top:24px;padding-top:24px;border-top:1px solid #2C2F33}
+.orden-pregunta>label{font-size:16px;line-height:1.5;color:#e5e2e1}
+/* Contraste del selector: el borde #2C2F33 sobre #1E1E1E daba 1.24:1, muy por
+   debajo del 3:1 que WCAG 1.4.11 pide para el limite de un control — sobre el
+   proyector el campo simplemente no se veia. #6a716b da 3.32:1. */
+.orden-pregunta>select,#estacion-interaccion select,#estacion-interaccion input[type="text"],#estacion-interaccion input[type="number"]{width:100%;max-width:32rem;min-height:44px;padding:8px 12px;font-family:'Hanken Grotesk',sans-serif;font-size:16px;line-height:1.5;color:#e5e2e1;background:#1E1E1E;border:1px solid #6a716b;border-radius:0}
+#estacion-interaccion select{appearance:none;-webkit-appearance:none;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,#bfcaba 50%),linear-gradient(135deg,#bfcaba 50%,transparent 50%);background-position:calc(100% - 18px) calc(50% - 3px),calc(100% - 12px) calc(50% - 3px);background-size:6px 6px,6px 6px;background-repeat:no-repeat;cursor:pointer}
+#estacion-interaccion select:hover,#estacion-interaccion input:hover{border-color:#bfcaba}
+#estacion-interaccion select:focus-visible,#estacion-interaccion input:focus-visible{outline:2px solid #88d982;outline-offset:2px;border-color:#88d982}
+/* El popup nativo no hereda el color del <select> en todas las plataformas:
+   sin esto las opciones salian oscuras sobre oscuro en Chrome/macOS. */
+#estacion-interaccion select option{background:#1E1E1E;color:#e5e2e1}
+
+/* ── Tabla de datos de E2/E3 ("Ver datos en tabla") ─────────────────────────
+   js/dataviz.js arma un <table> real (thead/tbody/th scope=col/caption) como
+   alternativa accesible al SVG, pero sin ninguna clase ni regla propia: sin
+   esto sale con el estilo por defecto del navegador -- sin bordes, sin
+   separacion entre celdas -- y en la Sala 3 las columnas quedan pegadas
+   ("0.1754.4%"). Mismo tratamiento mono/mayuscula que .exhibit__etiqueta, para
+   que combine con las tarjetas de datos que ya estan al lado. */
+.dataviz{margin-bottom:16px}
+.dataviz svg{width:100%;height:auto;display:block}
+.dataviz details{margin-top:12px;font-size:14px}
+.dataviz details summary{cursor:pointer;color:#bfcaba;padding:4px 0}
+.dataviz details summary:hover{color:#e5e2e1}
+.dataviz table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+.dataviz caption{text-align:left;font-weight:600;color:#e5e2e1;margin-bottom:8px}
+.dataviz th,.dataviz td{text-align:left;padding:8px 12px;border-bottom:1px solid #2C2F33}
+.dataviz th{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:#8a9485}
+.dataviz td{font-family:'Hanken Grotesk',sans-serif;color:#e5e2e1}
+/* Fila cebra: ayuda a seguir cada fila en tablas de 3+ columnas sin depender
+   de contar bordes. */
+.dataviz tbody tr:nth-child(even){background:rgba(255,255,255,.03)}
+/* La ultima fila es el total: una linea mas marcada la separa de los datos
+   que suma, sin agregar una columna ni un icono nuevo. */
+.dataviz tbody tr:last-child td{border-top:1px solid #6a716b;border-bottom:none;font-weight:600}
 </style>
 </head>
 <body class="flex h-screen overflow-hidden font-body-md text-body-md">
@@ -97,7 +187,8 @@ body{background:#121212;color:#e5e2e1}
 <div id="aviso-solo-apuntador" role="status" aria-live="polite" hidden class="mt-4"><span class="material-symbols-outlined text-sm" aria-hidden="true">lock</span><span id="aviso-solo-apuntador-texto">Solo tu apuntador puede enviar la respuesta. Podés seguir el expediente y discutir con tu equipo.</span></div>
 <div id="estacion-feedback" role="status" aria-live="polite" aria-atomic="true" hidden class="mt-4 p-4 border border-audit-border font-evidence-data"></div>
 <span id="estacion-intentos" class="font-label-sm text-label-sm text-on-surface-variant mt-2 block" aria-live="polite" aria-atomic="true"></span>
-<div class="mt-6 flex gap-3"><button id="btn-verificar-estacion" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-8 py-3 hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">fact_check</span>Verificar</button></div>
+<div class="mt-6 flex gap-3 flex-wrap"><button id="btn-verificar-estacion" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-8 py-3 hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">fact_check</span>Verificar</button><!-- Secundario a propósito: Verificar sigue siendo la acción principal de la sala. Antes solo se podía avanzar volviendo a la barra lateral, que en proyector queda fuera de vista cuando el panel está scrolleado hasta el feedback. --><button id="btn-siguiente-sala" type="button" hidden class="bg-surface-graphite border border-audit-border text-on-surface-variant font-evidence-data uppercase px-6 py-3 hover:border-primary hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-audit-border disabled:hover:text-on-surface-variant"><span data-rol="siguiente-texto">Siguiente sala</span><span class="material-symbols-outlined text-sm" aria-hidden="true">arrow_forward</span></button></div>
+<p id="siguiente-sala-motivo" class="font-label-sm text-label-sm text-on-surface-variant/70 mt-2" hidden></p>
 </div>
 </div>
 <!-- fragmentos strip literal Stitch -->

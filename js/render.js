@@ -52,22 +52,68 @@ function _mk(tag, attrs, text) {
 }
 
 // Orden helpers ---------------------------------------------------------
-function _ordenUpdateAria(ol) {
-  const items = [...ol.children];
-  items.forEach((li, i) => {
-    const up = li.querySelector('[data-dir="up"]');
-    const down = li.querySelector('[data-dir="down"]');
-    const isFirst = i === 0;
-    const isLast = i === items.length - 1;
-    if (up) {
-      up.disabled = isFirst;
-      up.setAttribute('aria-disabled', String(isFirst));
-    }
-    if (down) {
-      down.disabled = isLast;
-      down.setAttribute('aria-disabled', String(isLast));
-    }
+// El mecanismo son tarjetas que se colocan sobre casillas numeradas: la
+// posición 6 es una casilla real, no "el último de una lista". Antes era una
+// lista con botones ↑/↓, donde la posición era implícita.
+//
+// Se sostienen dos caminos equivalentes sobre el mismo estado del DOM:
+//   · puntero — arrastrar y soltar (HTML5 drag & drop)
+//   · teclado — Enter/Espacio levanta la tarjeta, Enter/Espacio sobre una
+//     casilla la coloca; Escape cancela. Sin esto, quien no pueda arrastrar
+//     se queda sin poder resolver la estación.
+// _leerRespuesta lee las casillas por orden de índice, así que ninguno de los
+// dos caminos necesita mantener una estructura aparte.
+
+// Barajado estable por contenido. La version anterior era (i*7+3)%n, que para
+// n=6 es una rotacion ciclica: dejaba los seis eslabones en su orden relativo
+// correcto, solo empezando por otro. Es decir, la secuencia entera se leia de
+// corrido en la bandeja — justo lo que el barajado debia evitar.
+function _ordenHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+function _ordenBarajar(items) {
+  return items
+    .map((it, i) => ({ it, k: _ordenHash(_norm(it.id) + '#' + i) }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.it);
+}
+
+function _ordenTarjetaEnCasilla(casilla) {
+  return casilla.querySelector('.orden-tarjeta');
+}
+
+// Deja la tarjeta en la casilla. Si la casilla ya tenía una, la desplazada va
+// a donde estaba la que entra (intercambio) o vuelve a la bandeja.
+function _ordenColocar(tarjeta, destino, bandeja) {
+  if (!tarjeta || !destino) return;
+  const origen = tarjeta.parentElement;
+  if (origen === destino) return;
+  const ocupante = destino.classList.contains('orden-casilla') ? _ordenTarjetaEnCasilla(destino) : null;
+  destino.appendChild(tarjeta);
+  if (ocupante) {
+    if (origen && origen.classList.contains('orden-casilla')) origen.appendChild(ocupante);
+    else bandeja.appendChild(ocupante);
+  }
+}
+
+function _ordenSincronizar(casillas, bandeja, live) {
+  casillas.forEach((c, i) => {
+    const t = _ordenTarjetaEnCasilla(c);
+    c.dataset.ocupada = t ? 'true' : 'false';
+    c.setAttribute('aria-label', t
+      ? `Casilla ${i + 1}: ${t.dataset.texto}. Activá para reemplazar.`
+      : `Casilla ${i + 1}, vacía.`);
   });
+  const faltan = casillas.filter((c) => !_ordenTarjetaEnCasilla(c)).length;
+  if (live) {
+    live.textContent = faltan === 0
+      ? 'Las seis casillas están completas.'
+      : `Faltan ${faltan} casilla${faltan === 1 ? '' : 's'} por completar.`;
+  }
+  if (bandeja) bandeja.dataset.vacia = bandeja.querySelector('.orden-tarjeta') ? 'false' : 'true';
 }
 
 // Public: render --------------------------------------------------------
@@ -111,19 +157,21 @@ function _renderOrden(contenedor, interaccion) {
   const pregunta = interaccion.pregunta || '';
   const opciones = Array.isArray(interaccion.opciones) ? interaccion.opciones : [];
 
-  // Lista ordenable con botones ↑/↓
-  const ol = _mk('ol');
-  ol.setAttribute('role', 'list');
-  ol.id = 'orden-lista';
+  const zona = _mk('div');
+  zona.className = 'orden-zona';
 
-  // Live region para anunciar movimientos (a11y §13, checklist 7.18)
+  const ayuda = _mk('p');
+  ayuda.className = 'orden-ayuda';
+  ayuda.id = 'orden-ayuda';
+  ayuda.textContent = 'Arrastrá cada tarjeta a su casilla. Con teclado: Enter o Espacio para levantar una tarjeta, y Enter o Espacio sobre la casilla donde va. Escape cancela.';
+  zona.appendChild(ayuda);
+
   const live = _mk('div');
   live.id = 'orden-live';
   live.setAttribute('role', 'status');
   live.setAttribute('aria-live', 'polite');
   live.setAttribute('aria-atomic', 'true');
   live.className = 'sr-only';
-  // sr-only inline fallback si no existe clase
   live.style.position = 'absolute';
   live.style.width = '1px';
   live.style.height = '1px';
@@ -131,80 +179,155 @@ function _renderOrden(contenedor, interaccion) {
   live.style.clip = 'rect(0,0,0,0)';
   live.style.whiteSpace = 'nowrap';
 
-  items.forEach((it) => {
+  // Tarjeta "levantada" por teclado. null = ninguna.
+  let levantada = null;
+
+  const casillas = [];
+  const rejilla = _mk('ol');
+  rejilla.className = 'orden-casillas';
+  rejilla.id = 'orden-lista';
+  rejilla.setAttribute('role', 'list');
+
+  function anunciar(txt) { live.textContent = txt; }
+
+  function soltarLevantada() {
+    if (!levantada) return;
+    levantada.classList.remove('is-levantada');
+    levantada.setAttribute('aria-grabbed', 'false');
+    levantada = null;
+    zona.classList.remove('orden-zona--colocando');
+  }
+
+  function levantar(tarjeta) {
+    if (levantada === tarjeta) { soltarLevantada(); anunciar('Tarjeta soltada.'); return; }
+    soltarLevantada();
+    levantada = tarjeta;
+    tarjeta.classList.add('is-levantada');
+    tarjeta.setAttribute('aria-grabbed', 'true');
+    zona.classList.add('orden-zona--colocando');
+    anunciar(`${tarjeta.dataset.texto} levantada. Elegí una casilla.`);
+  }
+
+  function colocarEn(destino) {
+    if (!levantada) return;
+    const texto = levantada.dataset.texto;
+    const t = levantada;
+    soltarLevantada();
+    _ordenColocar(t, destino, bandeja);
+    _ordenSincronizar(casillas, bandeja, live);
+    const idx = casillas.indexOf(destino);
+    anunciar(idx >= 0 ? `${texto} colocada en la casilla ${idx + 1}.` : `${texto} devuelta a la bandeja.`);
+    t.focus();
+  }
+
+  function prepararDestino(el) {
+    el.addEventListener('dragover', (ev) => { ev.preventDefault(); el.classList.add('is-sobre'); });
+    el.addEventListener('dragleave', () => el.classList.remove('is-sobre'));
+    el.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      el.classList.remove('is-sobre');
+      const id = ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '';
+      const tarjeta = id ? zona.querySelector(`.orden-tarjeta[data-id="${CSS.escape(id)}"]`) : null;
+      if (!tarjeta) return;
+      _ordenColocar(tarjeta, el, bandeja);
+      _ordenSincronizar(casillas, bandeja, live);
+      const idx = casillas.indexOf(el);
+      anunciar(idx >= 0 ? `${tarjeta.dataset.texto} colocada en la casilla ${idx + 1}.` : `${tarjeta.dataset.texto} devuelta a la bandeja.`);
+    });
+    el.addEventListener('click', () => { if (levantada) colocarEn(el); });
+    el.addEventListener('keydown', (ev) => {
+      if ((ev.key === 'Enter' || ev.key === ' ') && levantada) { ev.preventDefault(); colocarEn(el); }
+    });
+  }
+
+  items.forEach((_, i) => {
     const li = _mk('li');
+    li.className = 'orden-casilla';
+    li.dataset.pos = String(i + 1);
+    li.tabIndex = 0;
     li.setAttribute('role', 'listitem');
-    li.dataset.id = _norm(it.id);
-
-    const span = _mk('span');
-    span.textContent = String(it.texto ?? '');
-    span.id = 'orden-texto-' + _norm(it.id);
-
-    const ctrl = _mk('div');
-    ctrl.setAttribute('aria-hidden', 'false');
-
-    const btnUp = _mk('button', { type: 'button', 'data-dir': 'up' }, '↑');
-    btnUp.setAttribute('aria-label', `Mover ${String(it.texto ?? _norm(it.id))} hacia arriba`);
-    btnUp.style.minWidth = '44px';
-    btnUp.style.minHeight = '44px';
-
-    const btnDown = _mk('button', { type: 'button', 'data-dir': 'down' }, '↓');
-    btnDown.setAttribute('aria-label', `Mover ${String(it.texto ?? _norm(it.id))} hacia abajo`);
-    btnDown.style.minWidth = '44px';
-    btnDown.style.minHeight = '44px';
-
-    function mover(dir) {
-      const siblings = [...ol.children];
-      const idx = siblings.indexOf(li);
-      if (dir === 'up' && idx > 0) {
-        ol.insertBefore(li, siblings[idx - 1]);
-      } else if (dir === 'down' && idx < siblings.length - 1) {
-        const next = siblings[idx + 1];
-        // insertar después de next
-        if (next.nextSibling) ol.insertBefore(li, next.nextSibling);
-        else ol.appendChild(li);
-      } else {
-        return;
-      }
-      _ordenUpdateAria(ol);
-      const newIdx = [...ol.children].indexOf(li) + 1;
-      const total = ol.children.length;
-      live.textContent = `${String(it.texto ?? _norm(it.id))} movido a posición ${newIdx} de ${total}`;
-      // Foco permanece en el ítem movido (en el botón que se pulsó)
-      // Mantener foco en el botón que originó el movimiento
-      const target = dir === 'up' ? btnUp : btnDown;
-      // Si el botón quedó disabled tras mover, mover foco al otro botón del mismo li
-      if (target.disabled) {
-        const alt = dir === 'up' ? btnDown : btnUp;
-        alt.focus();
-      } else {
-        target.focus();
-      }
-    }
-
-    btnUp.addEventListener('click', () => mover('up'));
-    btnDown.addEventListener('click', () => mover('down'));
-
-    ctrl.appendChild(btnUp);
-    ctrl.appendChild(btnDown);
-    li.appendChild(span);
-    li.appendChild(ctrl);
-    ol.appendChild(li);
+    li.setAttribute('aria-describedby', 'orden-ayuda');
+    const num = _mk('span', { 'aria-hidden': 'true' }, String(i + 1));
+    num.className = 'orden-casilla__num';
+    li.appendChild(num);
+    prepararDestino(li);
+    casillas.push(li);
+    rejilla.appendChild(li);
   });
 
-  _ordenUpdateAria(ol);
-  contenedor.appendChild(ol);
-  contenedor.appendChild(live);
+  const bandeja = _mk('div');
+  bandeja.className = 'orden-bandeja';
+  bandeja.id = 'orden-bandeja';
+  bandeja.setAttribute('aria-label', 'Tarjetas sin colocar');
+  prepararDestino(bandeja);
+
+  // Orden de aparición barajado respecto del de la respuesta: si las tarjetas
+  // salen ya ordenadas, la estación se resuelve sin leer la evidencia.
+  // Barajado determinista a propósito (hash del id, nunca Math.random): todos
+  // los equipos ven el mismo tablero, así la dificultad es la misma para todos
+  // y el docente puede reproducir lo que ve un equipo que pide ayuda.
+  const barajados = _ordenBarajar(items);
+
+  barajados.forEach((it) => {
+    const t = _mk('div');
+    t.className = 'orden-tarjeta';
+    t.dataset.id = _norm(it.id);
+    t.dataset.texto = String(it.texto ?? '');
+    t.textContent = String(it.texto ?? '');
+    t.draggable = true;
+    t.tabIndex = 0;
+    t.setAttribute('role', 'button');
+    t.setAttribute('aria-grabbed', 'false');
+    t.setAttribute('aria-describedby', 'orden-ayuda');
+    t.addEventListener('dragstart', (ev) => {
+      if (ev.dataTransfer) { ev.dataTransfer.setData('text/plain', t.dataset.id); ev.dataTransfer.effectAllowed = 'move'; }
+      t.classList.add('is-arrastrando');
+    });
+    t.addEventListener('dragend', () => t.classList.remove('is-arrastrando'));
+    // stopPropagation en los dos caminos: la tarjeta vive DENTRO de una casilla
+    // (o de la bandeja), y ese contenedor tambien escucha click/keydown para
+    // recibir la tarjeta levantada. Sin cortar la propagacion, levantar burbujea
+    // al contenedor que la contiene, que la "coloca" donde ya estaba y la suelta
+    // en el acto: no se podia levantar ninguna tarjeta, ni con raton ni con
+    // teclado. El bug solo aparece en un navegador real, con eventos de verdad.
+    t.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      // Si hay otra levantada, este click la coloca aca (intercambio); si no,
+      // levanta esta.
+      if (levantada && levantada !== t) { colocarEn(t.parentElement); return; }
+      levantar(t);
+    });
+    t.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (levantada && levantada !== t) { colocarEn(t.parentElement); return; }
+        levantar(t);
+      } else if (ev.key === 'Escape' && levantada) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        soltarLevantada();
+        anunciar('Cancelado.');
+      }
+    });
+    bandeja.appendChild(t);
+  });
+
+  zona.appendChild(rejilla);
+  zona.appendChild(bandeja);
+  zona.appendChild(live);
+  contenedor.appendChild(zona);
+  _ordenSincronizar(casillas, bandeja, live);
 
   // Pregunta + select eslabón
   if (pregunta || opciones.length) {
     const field = _mk('div');
+    field.className = 'orden-pregunta';
     const label = _mk('label');
     label.setAttribute('for', 'orden-eslabon');
     label.textContent = pregunta || '¿En qué eslabón se concentra el menor valor y mayor costo?';
     const sel = _mk('select');
     sel.id = 'orden-eslabon';
-    // opción vacía placeholder
     const ph = _mk('option', { value: '' }, '-- Seleccioná --');
     ph.value = '';
     sel.appendChild(ph);
@@ -220,7 +343,8 @@ function _renderOrden(contenedor, interaccion) {
     _estado.refs.eslabon = sel;
   }
 
-  _estado.refs.ordenLista = ol;
+  _estado.refs.ordenCasillas = casillas;
+  _estado.refs.ordenLista = rejilla;
   _estado.refs.ordenLive = live;
 }
 
@@ -437,11 +561,23 @@ export function serializarRespuesta() {
 
   switch (t) {
     case 'orden': {
-      const ol = _estado.refs.ordenLista;
+      // Las casillas son la fuente de verdad del orden: se leen por indice.
+      // Antes esto buscaba li[data-id], que era la forma de la lista con
+      // botones arriba/abajo. En el tablero de casillas el data-id vive en la
+      // tarjeta anidada, no en el <li>, asi que devolvia [] siempre y la
+      // estacion quedaba imposible de resolver por mas bien colocada que
+      // estuviera. Se encontro probando en navegador, no leyendo el codigo.
+      const casillas = _estado.refs.ordenCasillas || [];
       const sel = _estado.refs.eslabon;
-      const orden = ol ? [...ol.querySelectorAll('li[data-id]')].map((li) => _norm(li.dataset.id)) : [];
+      const orden = casillas
+        .map((c) => _ordenTarjetaEnCasilla(c))
+        .filter(Boolean)
+        .map((t) => _norm(t.dataset.id));
       const eslabon = sel ? _norm(sel.value) : '';
-      return { orden, eslabon };
+      // Sin ninguna tarjeta colocada se omite la clave para que el servidor
+      // responda detalle 'vacio' (§12). Enviar [] lo haria comparar el arreglo
+      // y contestar 'orden-mal', que no es lo que pasa: no hay respuesta aun.
+      return orden.length ? { orden, eslabon } : { eslabon };
     }
     case 'numero': {
       const out = {};

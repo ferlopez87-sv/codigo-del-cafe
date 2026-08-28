@@ -28,6 +28,8 @@ let estacionesCache = null;
 let estacionesCargando = null;
 
 // Mapa de clases de estado admitidas por el contrato §7
+// Las 5 estaciones son fijas por contrato (inicializar_progreso las exige).
+const TOTAL_ESTACIONES = 5;
 const ESTADOS_VALIDOS = ['pendiente', 'progreso', 'resuelta', 'bloqueada'];
 const CLASES_ESTADO = ESTADOS_VALIDOS.map((e) => `is-${e}`);
 
@@ -186,12 +188,34 @@ function pintarTituloEstacion(estacion) {
   if (pilarEl) pilarEl.textContent = estacion.pilar || '';
 }
 
+// Reconoce ÚNICAMENTE <b>...</b> en el texto de contenido (CONTRACT §14.4:
+// nunca innerHTML con datos dinámicos) y arma <strong>/texto plano a mano —
+// cualquier otro `<...>` que aparezca en el contenido queda como texto
+// literal, igual que si esta función no existiera. 2026-08-28: antes
+// pintarNarrativaEstacion hacía p.textContent = texto directo, así que un
+// <b> ya presente en el contenido (Sala de Hechos) se veía literal
+// ("&lt;b&gt;...") en vez de negrita real — encontrado al verificar contra
+// el juego real el pedido de negrita en Sala Verde.
+function _pintarConNegritas(contenedor, texto) {
+  const partes = String(texto || '').split(/<b>(.*?)<\/b>/);
+  partes.forEach((parte, i) => {
+    if (!parte) return;
+    if (i % 2 === 1) {
+      const strong = document.createElement('strong');
+      strong.textContent = parte;
+      contenedor.appendChild(strong);
+    } else {
+      contenedor.appendChild(document.createTextNode(parte));
+    }
+  });
+}
+
 function pintarNarrativaEstacion(texto) {
   const cont = $('estacion-narrativa');
   if (!cont) return;
   while (cont.firstChild) cont.removeChild(cont.firstChild);
   const p = document.createElement('p');
-  p.textContent = texto || '';
+  _pintarConNegritas(p, texto);
   cont.appendChild(p);
 }
 
@@ -235,6 +259,16 @@ async function pintarEstacionEnPanel(id) {
     renderInteraccion(interaccionEl, prepararInteraccion(estacion));
     if(!soyApuntador){
       interaccionEl.querySelectorAll('input,select,button,textarea').forEach(el=>{ el.disabled = true; });
+      // El tablero de E1 son <div>/<li>, no controles de formulario: `disabled`
+      // no existe para ellos, asi que el selector de arriba no los tocaba y
+      // cualquier integrante podia arrastrar tarjetas y creer que su respuesta
+      // contaba. Se bloquea por aria-disabled (el CSS corta pointer-events) y
+      // se saca del orden de tabulacion.
+      interaccionEl.querySelectorAll('.orden-tarjeta,.orden-casilla').forEach(el=>{
+        el.setAttribute('aria-disabled','true');
+        el.setAttribute('draggable','false');
+        el.setAttribute('tabindex','-1');
+      });
       const b = $('btn-verificar-estacion'); if(b){ b.disabled=true; b.setAttribute('aria-disabled','true'); }
     }
   }
@@ -481,6 +515,11 @@ function deshabilitarInteraccionesPorCierre(codigo) {
   if (btnMaestro) btnMaestro.setAttribute('aria-disabled', 'true');
   const inputMaestro = $('input-codigo-maestro');
   if (inputMaestro) inputMaestro.setAttribute('aria-disabled', 'true');
+  // Sesion cerrada o tiempo agotado es terminal: navegar a otra sala solo
+  // llevaria a un tablero que ya no acepta respuestas. La bandera sobrevive a
+  // los repintados, que si no volverian a habilitar el boton.
+  juegoCerrado = true;
+  actualizarBotonSiguiente();
 }
 
 // ---------------------------------------------------------------------------
@@ -601,6 +640,10 @@ function pintarTarjetas(estaciones) {
       card.setAttribute('tabindex', '0');
     }
   });
+
+  // Resolver una sala desbloquea la siguiente: el boton tiene que enterarse en
+  // el mismo repintado, si no se queda apagado hasta recargar.
+  actualizarBotonSiguiente();
 }
 
 function pintarBarraProgreso(resueltas, total) {
@@ -697,6 +740,58 @@ export async function seleccionarSala(estacionId) {
     if (!h2.hasAttribute('tabindex')) h2.setAttribute('tabindex', '-1');
     h2.focus();
   }
+
+  actualizarBotonSiguiente();
+}
+
+// Boton "Siguiente sala" — vive al lado de Verificar, dentro de #panel-estacion.
+// Hasta ahora la unica forma de avanzar era volver a la barra lateral; en
+// proyector, con el panel scrolleado hasta el feedback, la barra queda fuera de
+// vista y el grupo se quedaba sin saber como seguir.
+//
+// No decide por su cuenta si la sala siguiente esta disponible: lee el estado
+// que ya pinto el servidor en la barra lateral (.is-bloqueada), asi no hay dos
+// nociones de "desbloqueada" que se puedan contradecir.
+let juegoCerrado = false;
+
+function actualizarBotonSiguiente() {
+  const btn = $('btn-siguiente-sala');
+  if (!btn) return;
+  const motivo = $('siguiente-sala-motivo');
+
+  const siguiente = estacionActual == null ? null : Number(estacionActual) + 1;
+
+  // En la Sala 5 no hay siguiente: el paso es el codigo maestro, que ya tiene
+  // su propia seccion. Mostrar un boton muerto ahi solo confunde.
+  if (!siguiente || siguiente > TOTAL_ESTACIONES) {
+    setHidden(btn, true);
+    setHidden(motivo, true);
+    delete btn.dataset.destino;
+    return;
+  }
+
+  const card = document.querySelector(`#nav-salas .estacion-card[data-estacion="${siguiente}"]`);
+  const bloqueada = juegoCerrado || !card || card.classList.contains('is-bloqueada');
+
+  setHidden(btn, false);
+  btn.dataset.destino = String(siguiente);
+  btn.disabled = bloqueada;
+  btn.setAttribute('aria-disabled', String(bloqueada));
+  btn.setAttribute('aria-label', bloqueada ? `Siguiente sala (Sala ${siguiente}, bloqueada)` : `Ir a la Sala ${siguiente}`);
+
+  // El motivo se dice con texto, no solo con el boton apagado (§13: ningun
+  // estado solo por color/forma).
+  if (motivo) {
+    if (!bloqueada) {
+      setHidden(motivo, true);
+      motivo.textContent = '';
+    } else {
+      motivo.textContent = juegoCerrado
+        ? 'La sesión está cerrada: ya no se puede avanzar.'
+        : `La Sala ${siguiente} se desbloquea cuando resuelvas esta.`;
+      setHidden(motivo, false);
+    }
+  }
 }
 
 function limpiarFeedbackEstacion() {
@@ -740,6 +835,15 @@ export async function verificarEstacion() {
 
   if (error && !datos) {
     mostrarFeedbackEstacion(mensajeDeError(error), 'error');
+    // El servidor manda {error:'sesion_cerrada'} con status 200, y api.js
+    // normaliza eso a {datos:null, error:{codigo}} — no a {datos:{error}}. Por
+    // eso la rama de abajo que mira datos.error nunca se alcanzaba para este
+    // caso y la partida seguia "viva" despues de cerrada: se veia el aviso
+    // pero los controles quedaban habilitados. Hay que leer error.codigo aca.
+    const cod = typeof error === 'string' ? error : (error && error.codigo);
+    if (cod === 'tiempo_agotado' || cod === 'sesion_cerrada') {
+      deshabilitarInteraccionesPorCierre(cod);
+    }
     return;
   }
 
@@ -968,6 +1072,15 @@ function enlazarEventosUnaVez() {
   // Botón verificar dentro de #panel-estacion
   const btnVerificar = $('btn-verificar-estacion') || $('estacion-verificar') || document.querySelector('[data-accion="verificar-estacion"]');
   if (btnVerificar) btnVerificar.addEventListener('click', verificarEstacion);
+
+  // Botón "Siguiente sala" — el destino lo dejo actualizarBotonSiguiente() en
+  // data-destino, para no recalcular aqui una segunda nocion de "la siguiente".
+  const btnSiguiente = $('btn-siguiente-sala');
+  if (btnSiguiente) btnSiguiente.addEventListener('click', () => {
+    if (btnSiguiente.disabled || btnSiguiente.getAttribute('aria-disabled') === 'true') return;
+    const destino = Number(btnSiguiente.dataset.destino);
+    if (Number.isInteger(destino)) seleccionarSala(destino);
+  });
 
   // Código maestro
   const btnMaestro = $('btn-verificar-maestro');
