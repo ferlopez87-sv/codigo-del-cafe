@@ -1089,6 +1089,8 @@ function enlazarEventosUnaVez() {
   // Drawer móvil
   const btnMenu = $('btn-menu-mobile');
   if(btnMenu) btnMenu.addEventListener('click', toggleMenuMobile);
+  const btnCerrar = $('btn-cerrar-menu-mobile');
+  if(btnCerrar) btnCerrar.addEventListener('click', cerrarMenuMobile);
   const backdrop = $('backdrop-mobile');
   if(backdrop) backdrop.addEventListener('click', cerrarMenuMobile);
   document.addEventListener('keydown', (e)=>{
