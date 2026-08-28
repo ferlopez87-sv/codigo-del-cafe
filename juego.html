@@ -7,6 +7,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500;800&display=swap" rel="stylesheet">
 <script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#88d982","primary-fixed":"#a3f69c","on-primary":"#003909","primary-container":"#2e7d32","on-primary-container":"#cbffc2","background":"#131313","surface":"#131313","surface-graphite":"#1E1E1E","surface-document":"#F5F5DC","text-on-document":"#121212","audit-border":"#2C2F33","on-surface":"#e5e2e1","on-surface-variant":"#bfcaba","surface-container":"#201f1f","surface-container-high":"#2a2a2a","surface-container-low":"#1c1b1b","surface-container-lowest":"#0e0e0e","outline":"#8a9485","outline-variant":"#40493d","error":"#ffb4ab","error-container":"#93000a","surface-variant":"#353534"},spacing:{"card-padding":"20px","stack-gap":"12px","margin-main":"24px","sidebar-width":"280px","gutter-grid":"16px"},fontFamily:{"body-md":["Hanken Grotesk"],"headline-lg":["Hanken Grotesk"],"headline-md":["Hanken Grotesk"],"evidence-data":["JetBrains Mono"],"stamp-lg":["JetBrains Mono"],"label-sm":["JetBrains Mono"]},fontSize:{"body-md":["16px",{lineHeight:"24px",fontWeight:"400"}],"headline-lg":["32px",{lineHeight:"40px",letterSpacing:"-0.02em",fontWeight:"700"}],"headline-md":["24px",{lineHeight:"32px",fontWeight:"600"}],"evidence-data":["14px",{lineHeight:"20px",fontWeight:"500"}],"stamp-lg":["20px",{lineHeight:"24px",letterSpacing:"0.1em",fontWeight:"800"}],"label-sm":["12px",{lineHeight:"16px",fontWeight:"400"}]}}}}</script>
 <style>
+/* Drawer móvil: el sidebar es el MISMO DOM en desktop y móvil — en móvil
+   entra/sale con translate, no con display:none (si no, no hay transición y
+   pintarTarjetas tendría que mantener dos navs). */
+#sidebar-salas.is-abierta{transform:translateX(0)}
+#backdrop-mobile{transition:opacity .2s}
+#backdrop-mobile[hidden]{display:none;opacity:0}
+body.is-menu-abierto{overflow:hidden}
+@media(min-width:768px){#backdrop-mobile{display:none !important} body.is-menu-abierto{overflow:auto}}
 /* La pagina es SIEMPRE oscura (nunca sigue el tema del SO): sin esto, el
    navegador dibuja los controles que el resta CSS no puede tocar -- el
    popup nativo del <select>, scrollbars -- con su tema CLARO por defecto.
@@ -120,8 +128,8 @@ body{background:#121212;color:#e5e2e1}
 <!-- aviso conexión -->
 <div id="aviso-conexion" role="status" aria-live="polite" aria-atomic="true" hidden><span aria-hidden="true">⚠</span><span>Sin conexión. Tu progreso ya guardado no se pierde.</span></div>
 
-<!-- SideNav literal Stitch -->
-<nav id="sidebar-salas" class="hidden md:flex bg-surface-container border-r border-audit-border flex-col h-full py-6 w-sidebar-width shrink-0 relative z-20" aria-label="Equipo, tiempo y salas">
+<!-- SideNav literal Stitch — drawer en móvil, fijo en desktop -->
+<nav id="sidebar-salas" class="fixed inset-y-0 left-0 z-30 flex flex-col h-full py-6 w-sidebar-width bg-surface-container border-r border-audit-border shrink-0 -translate-x-full md:translate-x-0 md:static md:flex transition-transform duration-200" aria-label="Equipo, tiempo y salas">
 <div class="px-6 mb-6 border-b border-audit-border pb-6">
 <div class="font-stamp-lg text-stamp-lg text-on-surface-variant opacity-50 mb-4 truncate">Misión: El código secreto del café</div>
 <h1 class="font-headline-md text-headline-md text-primary uppercase">Tablero de auditoría</h1>
@@ -147,12 +155,13 @@ body{background:#121212;color:#e5e2e1}
 <button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" data-estacion="4" aria-current="false" aria-describedby="estado-estacion-4"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">groups</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 4</span><span class="font-evidence-data text-xs">Sala de las Personas</span></span></span><span id="estado-estacion-4" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">○ Pendiente</span></button>
 <button class="nav-sala estacion-card is-bloqueada w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group" data-estacion="5" aria-current="false" aria-disabled="true" aria-describedby="estado-estacion-5"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">gavel</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 5</span><span class="font-evidence-data text-xs">Sala de la Verdad</span></span></span><span id="estado-estacion-5" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">🔒 Bloqueada</span></button>
 </nav>
-<div class="px-6 mt-auto pt-6 border-t border-audit-border"><a href="index.html" class="w-full bg-surface-graphite border border-audit-border text-on-surface-variant hover:text-primary hover:border-primary font-evidence-data text-evidence-data uppercase py-3 flex justify-center items-center gap-2 no-underline"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir</a></div>
+ <div class="px-6 mt-auto pt-6 border-t border-audit-border"><a href="index.html" class="w-full bg-surface-graphite border border-audit-border text-on-surface-variant hover:text-primary hover:border-primary font-evidence-data text-evidence-data uppercase py-3 flex justify-center items-center gap-2 no-underline"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir</a></div>
 </nav>
+<div id="backdrop-mobile" hidden class="fixed inset-0 bg-black/50 z-20 md:hidden" aria-hidden="true"></div>
 
 <!-- Main -->
 <main id="contenido-principal" class="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
-<header class="md:hidden flex justify-between items-center px-4 h-16 bg-surface border-b border-audit-border shrink-0"><span class="font-stamp-lg text-stamp-lg uppercase text-primary flex items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">security</span>CGC Auditoría</span><span id="cronometro-mobile" class="font-evidence-data text-error" aria-hidden="true">50:00</span></header>
+<header class="md:hidden flex justify-between items-center px-4 h-16 bg-surface border-b border-audit-border shrink-0"><div class="flex items-center gap-2"><button id="btn-menu-mobile" type="button" class="p-2 -ml-2 text-on-surface hover:text-primary" aria-label="Abrir menú de salas" aria-expanded="false" aria-controls="sidebar-salas"><span class="material-symbols-outlined" aria-hidden="true">menu</span></button><span class="font-stamp-lg text-stamp-lg uppercase text-primary flex items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">security</span>CGC Auditoría</span></div><span id="cronometro-mobile" class="font-evidence-data text-error" aria-hidden="true">50:00</span></header>
 
 <!-- Bienvenida §9.1.5 -->
 <section id="pantalla-bienvenida" role="region" aria-labelledby="bienvenida-titulo" class="p-8 max-w-3xl mx-auto w-full">

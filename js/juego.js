@@ -523,6 +523,32 @@ function deshabilitarInteraccionesPorCierre(codigo) {
 }
 
 // ---------------------------------------------------------------------------
+// Drawer móvil — mismo #sidebar-salas en desktop y móvil (§11)
+// En móvil entra/sale con translate; en desktop es estático. No se duplica
+// #nav-salas para no tener dos fuentes de estado.
+// ---------------------------------------------------------------------------
+function abrirMenuMobile(){
+  const nav = $('sidebar-salas'); const bd = $('backdrop-mobile'); const btn = $('btn-menu-mobile');
+  if(nav) nav.classList.add('is-abierta');
+  if(bd) bd.removeAttribute('hidden');
+  if(btn) btn.setAttribute('aria-expanded','true');
+  document.body.classList.add('is-menu-abierto');
+}
+function cerrarMenuMobile(){
+  const nav = $('sidebar-salas'); const bd = $('backdrop-mobile'); const btn = $('btn-menu-mobile');
+  if(nav) nav.classList.remove('is-abierta');
+  if(bd) bd.setAttribute('hidden','');
+  if(btn) btn.setAttribute('aria-expanded','false');
+  document.body.classList.remove('is-menu-abierto');
+  if(btn) btn.focus();
+}
+function toggleMenuMobile(){
+  const nav = $('sidebar-salas');
+  if(nav && nav.classList.contains('is-abierta')) cerrarMenuMobile();
+  else abrirMenuMobile();
+}
+
+// ---------------------------------------------------------------------------
 // Pintado — barra lateral, panel, contador, fragmentos (§7.2)
 // ---------------------------------------------------------------------------
 // Quién está logueado debe verse todo el tiempo (§sidebar-salas, fuera de
@@ -1045,6 +1071,8 @@ function enlazarEventosUnaVez() {
       if (card.classList.contains('is-bloqueada') || card.getAttribute('aria-disabled') === 'true') return;
       const id = card.getAttribute('data-estacion');
       seleccionarSala(id);
+      // En móvil el drawer taparía el panel recién pintado
+      if(window.innerWidth < 768) cerrarMenuMobile();
     });
     lista.addEventListener('keydown', (e) => {
       const card = e.target.closest('.estacion-card[data-estacion]');
@@ -1053,9 +1081,22 @@ function enlazarEventosUnaVez() {
         e.preventDefault();
         if (card.classList.contains('is-bloqueada')) return;
         seleccionarSala(card.getAttribute('data-estacion'));
+        if(window.innerWidth < 768) cerrarMenuMobile();
       }
     });
   }
+
+  // Drawer móvil
+  const btnMenu = $('btn-menu-mobile');
+  if(btnMenu) btnMenu.addEventListener('click', toggleMenuMobile);
+  const backdrop = $('backdrop-mobile');
+  if(backdrop) backdrop.addEventListener('click', cerrarMenuMobile);
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      const nav=$('sidebar-salas');
+      if(nav && nav.classList.contains('is-abierta')){ e.preventDefault(); cerrarMenuMobile(); }
+    }
+  });
 
   // Botón Iniciar auditoría — sala de espera §7
   const btnIniciar = $('btn-iniciar');
