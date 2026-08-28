@@ -263,8 +263,19 @@ async function handleBuscarEquipo(e){
     const li=document.createElement('li'); li.setAttribute('role','listitem');
     const label=document.createElement('label'); label.className='flex items-center gap-3 p-3 border border-audit-border rounded cursor-pointer hover:border-primary';
     const radio=document.createElement('input'); radio.type='radio'; radio.name='eq-quien-soy'; radio.value=p.perfil_id;
-    radio.addEventListener('change', ()=>{ perfilEquipoElegido = radio.value; $('btn-eq-entrar').disabled = false; });
-    const span=document.createElement('span'); span.className='font-body-md text-body-md text-text-on-document'; span.textContent = p.nombre;
+    // 2026-08-28 (pedido de Fernando): si un usuario ya entró, otro no puede
+    // usar su lugar — acá se avisa ANTES de que elija (server-side también
+    // lo bloquea, esto es solo para que no le salga un error genérico sin
+    // entender por qué). El texto visible ("ya entró") es la señal real —
+    // el disabled es refuerzo, nunca el único portador (CONTRACT §15).
+    if(p.ya_entro){
+      label.classList.add('opacity-60','cursor-not-allowed');
+      label.classList.remove('cursor-pointer','hover:border-primary');
+      radio.disabled = true;
+    } else {
+      radio.addEventListener('change', ()=>{ perfilEquipoElegido = radio.value; $('btn-eq-entrar').disabled = false; });
+    }
+    const span=document.createElement('span'); span.className='font-body-md text-body-md text-text-on-document'; span.textContent = p.ya_entro ? `${p.nombre} — ya entró` : p.nombre;
     label.append(radio, span);
     li.appendChild(label);
     lista.appendChild(li);
@@ -280,7 +291,11 @@ async function handleEntrarEquipo(){
   const {error} = await Auth.accesoEquipo(codigoEquipoPendiente, perfilEquipoElegido);
   if(error){
     btn.disabled=false;
-    setCampoError('eq-codigo-error', 'No se pudo entrar. Volvé a buscar el equipo.');
+    // lugar_ya_tomado (2026-08-28): la lista ya avisa quién entró, pero dos
+    // personas pueden elegir el mismo nombre casi al mismo tiempo — acá cae
+    // quien pierde esa carrera. Mensaje distinto del genérico para que
+    // entienda qué pasó, no que "algo falló".
+    setCampoError('eq-codigo-error', error?.mensaje==='lugar_ya_tomado' ? 'Alguien ya entró como esa persona. Volvé a buscar el equipo y elegí otro nombre, o pedile ayuda a tu docente.' : 'No se pudo entrar. Volvé a buscar el equipo.');
     return;
   }
   setTimeout(()=>{ window.location.href='juego.html'; }, 300);

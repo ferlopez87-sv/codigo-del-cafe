@@ -174,7 +174,9 @@ router.post('/equipo-por-codigo', async (req,res)=>{
     const { equipo_id, expira_en } = row.rows[0];
     if(new Date(expira_en) < new Date()) return res.status(400).json({ error:'codigo_vencido' });
     const eq = await pool.query('SELECT nombre_de_equipo($1) as nombre', [equipo_id]);
-    const integrantes = await pool.query('SELECT perfil_id, nombre FROM integrantes_de_equipo($1)', [equipo_id]);
+    // ya_entro (2026-08-28): para que la pantalla de "¿quién sos?" marque
+    // como tomados a quienes ya entraron — no revela nada más que antes.
+    const integrantes = await pool.query('SELECT perfil_id, nombre, ya_entro FROM integrantes_de_equipo($1)', [equipo_id]);
     return res.json({ equipoId: equipo_id, equipoNombre: eq.rows[0]?.nombre||'', integrantes: integrantes.rows });
   }catch(e){ console.error('[equipo-por-codigo]', e); res.status(500).json({ error:'error_interno' }); }
 });
@@ -194,6 +196,15 @@ router.post('/acceso-equipo', async (req,res)=>{
     const integrantes = await pool.query('SELECT * FROM integrantes_de_equipo($1)', [equipo_id]);
     const perfil = integrantes.rows.find(r=> r.perfil_id === perfilId);
     if(!perfil) return res.status(400).json({ error:'perfil_no_es_de_este_equipo' });
+
+    // 2026-08-28 (pedido de Fernando): "si un usuario ya entró, otro no
+    // puede usar su lugar". reclamar_lugar_equipo marca primer_acceso_en de
+    // forma atómica (WHERE ... IS NULL) — si ya estaba marcado, no emite la
+    // cookie. La búsqueda de arriba (equipo-por-codigo) ya avisa en la UI
+    // qué nombres están tomados; esto es el cierre server-side por si dos
+    // personas llegan a elegir el mismo nombre casi al mismo tiempo.
+    const claim = await pool.query('SELECT reclamar_lugar_equipo($1,$2) as ok', [equipo_id, perfilId]);
+    if(!claim.rows[0]?.ok) return res.status(409).json({ error:'lugar_ya_tomado' });
 
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(token);

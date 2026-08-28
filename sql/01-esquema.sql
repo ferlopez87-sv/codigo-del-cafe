@@ -95,6 +95,15 @@ create table if not exists integrantes (
   foreign key (equipo_id, sesion_id) references equipos(id, sesion_id)
 );
 
+-- 2026-08-28 (pedido de Fernando): "si un usuario ya entró, otro no puede
+-- usar su lugar" — el acceso por código de equipo dejaba elegir cualquier
+-- nombre de la lista sin marcar que alguien ya lo había reclamado, así que
+-- dos personas podían entrar como la misma identidad. `alter table` en vez
+-- de meter la columna en el `create table` de arriba porque esa sentencia
+-- ya no corre en instalaciones existentes (la tabla ya existe) — así sí
+-- llega a Render en el próximo arranque.
+alter table integrantes add column if not exists primer_acceso_en timestamptz;
+
 create or replace function trg_integrantes_sesion() returns trigger
 language plpgsql as $$
 begin

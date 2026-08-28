@@ -10,13 +10,39 @@
 -- ni siquiera tiene sesión. Solo se llama después de validar el código de
 -- equipo por su hash — nunca directo desde una ruta sin ese chequeo previo.
 -- -----------------------------------------------------------------------------
+-- drop explícito (2026-08-28): `create or replace` no puede cambiar la forma
+-- de retorno de una función table-returning (acá se agregó la columna
+-- ya_entro) — sin este drop, el arranque en una base ya migrada (Render
+-- incluido) falla con "cannot change return type of existing function".
+drop function if exists integrantes_de_equipo(uuid);
 create or replace function integrantes_de_equipo(p_equipo uuid)
-returns table (perfil_id uuid, nombre text, correo text, carne text, rol text, es_apuntador boolean)
+returns table (perfil_id uuid, nombre text, correo text, carne text, rol text, es_apuntador boolean, ya_entro boolean)
 language sql security definer stable set search_path = public as $$
-  select p.id, p.nombre, p.correo, p.carne, p.rol, i.es_apuntador
+  select p.id, p.nombre, p.correo, p.carne, p.rol, i.es_apuntador, i.primer_acceso_en is not null
   from integrantes i join perfiles p on p.id = i.perfil_id
   where i.equipo_id = p_equipo
   order by p.nombre
+$$;
+
+-- reclamar_lugar_equipo(p_equipo, p_perfil) — SECURITY DEFINER, mismo motivo
+-- que integrantes_de_equipo: corre sin identidad, antes del login. Marca
+-- primer_acceso_en la primera vez que alguien entra con ese perfil dentro
+-- del equipo; si ya estaba marcado, no lo toca y devuelve false. Así, si un
+-- usuario ya entró, otro no puede usar su lugar (pedido de Fernando
+-- 2026-08-28) — /api/auth/acceso-equipo llama esto después de confirmar que
+-- el perfil es de ese equipo, y si devuelve false no emite la cookie. El
+-- `where primer_acceso_en is null` hace el chequeo-y-marca atómico: ante dos
+-- clics simultáneos sobre el mismo nombre, solo uno gana la carrera.
+create or replace function reclamar_lugar_equipo(p_equipo uuid, p_perfil uuid)
+returns boolean
+language sql security definer volatile set search_path = public as $$
+  with intento as (
+    update integrantes
+    set primer_acceso_en = now()
+    where equipo_id = p_equipo and perfil_id = p_perfil and primer_acceso_en is null
+    returning 1
+  )
+  select exists(select 1 from intento)
 $$;
 
 -- Mismo motivo que integrantes_de_equipo: /api/auth/equipo-por-codigo corre
