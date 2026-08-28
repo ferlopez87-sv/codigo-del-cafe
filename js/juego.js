@@ -137,7 +137,12 @@ function pintarValorDato(contenedorDd, valor) {
     const ul = document.createElement('ul');
     valor.forEach((item) => {
       const li = document.createElement('li');
-      li.textContent = item && typeof item === 'object' ? JSON.stringify(item) : String(item);
+      // 2026-08-28: mismo reconocimiento de <b> que la narrativa (_pintarConNegritas,
+      // más abajo en este archivo — function declaration, se puede llamar desde
+      // acá aunque esté definida después) — un ítem de datos también puede pedir
+      // negrita (ej. "Huella total" de Sala Verde), y sin esto se vería literal.
+      if (item && typeof item === 'object') li.textContent = JSON.stringify(item);
+      else _pintarConNegritas(li, String(item));
       ul.appendChild(li);
     });
     contenedorDd.appendChild(ul);
@@ -153,7 +158,7 @@ function pintarValorDato(contenedorDd, valor) {
     });
     contenedorDd.appendChild(subDl);
   } else {
-    contenedorDd.textContent = valor == null ? '' : String(valor);
+    _pintarConNegritas(contenedorDd, valor == null ? '' : String(valor));
   }
 }
 
@@ -1098,6 +1103,26 @@ function enlazarEventosUnaVez() {
       const nav=$('sidebar-salas');
       if(nav && nav.classList.contains('is-abierta')){ e.preventDefault(); cerrarMenuMobile(); }
     }
+  });
+
+  // Disuasión de copia — parcial, solo expediente (no inputs)
+  // No es seguridad, solo fricción. Se excluyen inputs/selects/textarea
+  // para no romper veredicto ni accesibilidad.
+  const _esEditable = (el)=> !!(el && el.closest && el.closest('input,textarea,select,[contenteditable="true"],[contenteditable=""]'));
+  const _esExpediente = (el)=> !!(el && el.closest && el.closest('#estacion-narrativa,#estacion-datos,#estacion-reto,#estacion-interaccion'));
+  ['copy','cut'].forEach(ev=>{
+    document.addEventListener(ev, (e)=>{
+      if(_esEditable(e.target)) return;
+      if(_esExpediente(e.target)) e.preventDefault();
+    });
+  });
+  document.addEventListener('contextmenu', (e)=>{
+    if(_esEditable(e.target)) return;
+    if(_esExpediente(e.target)) e.preventDefault();
+  });
+  document.addEventListener('selectstart', (e)=>{
+    if(_esEditable(e.target)) return;
+    if(_esExpediente(e.target)) e.preventDefault();
   });
 
   // Botón Iniciar auditoría — sala de espera §7

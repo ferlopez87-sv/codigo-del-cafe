@@ -15,6 +15,14 @@
 #backdrop-mobile[hidden]{display:none;opacity:0}
 body.is-menu-abierto{overflow:hidden}
 @media(min-width:768px){#backdrop-mobile{display:none !important} body.is-menu-abierto{overflow:auto}}
+/* Disuasión de copia — parcial (solo expediente evaluado, no inputs).
+   No es seguridad real (view-source/DevTools lo bypassa), solo fricción
+   casual. Inputs/selects/textarea se excluyen explícitamente abajo. */
+#estacion-narrativa, #estacion-datos, #estacion-reto, #estacion-interaccion{user-select:none;-webkit-user-select:none}
+#estacion-narrativa input, #estacion-narrativa textarea, #estacion-narrativa select,
+#estacion-datos input, #estacion-datos textarea, #estacion-datos select,
+#estacion-reto input, #estacion-reto textarea, #estacion-reto select,
+#estacion-interaccion input, #estacion-interaccion textarea, #estacion-interaccion select{user-select:text;-webkit-user-select:text}
 /* La pagina es SIEMPRE oscura (nunca sigue el tema del SO): sin esto, el
    navegador dibuja los controles que el resta CSS no puede tocar -- el
    popup nativo del <select>, scrollbars -- con su tema CLARO por defecto.
