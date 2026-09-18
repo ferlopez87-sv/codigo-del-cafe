@@ -1,11 +1,21 @@
 // js/docente.js — Panel docente (te-panel / te-equipos / te-export)
 // Vanilla type:module, usa Docente/Auth de api.js, textContent siempre (XSS §14.4)
 import { Auth, Docente } from './api.js';
+import { pintarNarrativaEstacion, pintarDatosEstacion, pintarRetoEstacion } from './contenido-render.js';
 
 let sesionActivaId = null;
 let sesionActivaEstado = 'borrador';
 let equiposActuales = []; // [{id, nombre}] — se repuebla en cada pintarEquipos(), la usan los <select> de asignar y rúbrica
 let desempenoActual = []; // filas crudas de Docente.desempeno() (v_desempeno) — la usa la "Evidencia de juego" de la rúbrica, sin pedir nada nuevo al servidor
+
+// Editor de contenido de salas (2026-09-02, solo super-admin) — ver detalle
+// junto a cargarContenidoSalas() más abajo.
+let estacionesContenido = []; // cache de Docente.estaciones() (las 5 filas completas)
+let salaEditandoId = null;
+// Copia de trabajo del formulario. `datosLista` (no un objeto plano) para
+// poder reordenar/renombrar claves sin perder el resto mientras se edita —
+// se convierte a objeto recién al pintar la vista previa o al guardar.
+let formContenido = { titulo:'', pilar:'', narrativa:'', reto:'', feedback_ok:'', datosLista:[], pistas:[] };
 
 function $(id){ return document.getElementById(id); }
 function setText(id, v){ const el=$(id); if(el) el.textContent= v==null?'':String(v); }
@@ -71,6 +81,8 @@ async function initDocente(){
     if(correo==='fglopez@monicaherrera.edu.sv'){
       const c=$('consola-super-admin'); if(c) c.removeAttribute('hidden');
       cargarConsolaSuperAdmin();
+      cargarContenidoSalas();
+      enlazarEventosContenido();
     }
   }catch{}
   await cargarSesiones();
@@ -194,6 +206,260 @@ async function cargarConsolaSuperAdmin(){
   });
   tablaEquipos.appendChild(tbodyE);
   cont.appendChild(tablaEquipos);
+}
+
+// ---------------------------------------------------------------------------
+// Editor de contenido de las 5 salas (2026-09-02, solo super-admin).
+// El texto de las salas vivía solo en sql/05-seed.sql — cualquier edición
+// era tocar SQL a mano (con el riesgo real ya visto: un salto de línea
+// suelto rompió la migración una vez). `datos`/`pistas` de una sala se
+// guardan acá como `datosLista`/array de strings mientras se edita, y solo
+// se convierten al objeto/array real de la API al pintar la vista previa o
+// al guardar — así se puede renombrar una clave o reordenar sin perder el
+// resto del formulario. La vista previa reusa pintarNarrativaEstacion/
+// pintarDatosEstacion/pintarRetoEstacion de js/contenido-render.js: es el
+// MISMO código que pinta #panel-estacion para el estudiante, no una
+// reconstrucción aparte.
+// ---------------------------------------------------------------------------
+
+function objetoADatosLista(obj){
+  if(!obj || typeof obj!=='object') return [];
+  return Object.entries(obj).map(([clave, valor])=>{
+    if(Array.isArray(valor)) return { clave, tipo:'lista', items: valor.map((v)=>String(v)) };
+    if(valor && typeof valor==='object') return { clave, tipo:'objeto', pares: Object.entries(valor).map(([k,v])=>({ clave:k, valor:String(v) })) };
+    return { clave, tipo:'texto', valor: valor==null ? '' : String(valor) };
+  });
+}
+// Filas sin nombre de clave se ignoran al guardar/previsualizar — evita
+// mandar `{"": "..."}` al servidor por una fila a medio llenar.
+function datosListaAObjeto(lista){
+  const out = {};
+  (lista||[]).forEach((fila)=>{
+    const clave = (fila.clave||'').trim();
+    if(!clave) return;
+    if(fila.tipo==='lista') out[clave] = (fila.items||[]).slice();
+    else if(fila.tipo==='objeto'){
+      const sub = {};
+      (fila.pares||[]).forEach((p)=>{ const k=(p.clave||'').trim(); if(k) sub[k]=p.valor||''; });
+      out[clave] = sub;
+    } else out[clave] = fila.valor||'';
+  });
+  return out;
+}
+
+async function cargarContenidoSalas(){
+  const lista = $('lista-salas-contenido');
+  if(!lista) return;
+  limpiarTabla(lista);
+  const {datos, error} = await Docente.estaciones();
+  if(error){
+    const li=document.createElement('li'); li.textContent = error.mensaje||'No se pudo cargar el contenido de las salas.';
+    lista.appendChild(li);
+    return;
+  }
+  estacionesContenido = Array.isArray(datos) ? datos : [];
+  estacionesContenido.forEach((est)=>{
+    const li=document.createElement('li'); li.setAttribute('role','listitem');
+    const btn=document.createElement('button'); btn.type='button';
+    btn.className='w-full text-left px-3 py-2 border border-audit-border rounded transition-colors font-evidence-data text-xs hover:border-primary hover:bg-surface-container-high aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary';
+    btn.textContent = `Sala ${est.id} — ${est.titulo}`;
+    btn.dataset.salaId = est.id;
+    btn.setAttribute('aria-pressed', Number(est.id)===Number(salaEditandoId) ? 'true':'false');
+    btn.addEventListener('click', ()=> seleccionarSalaParaEditar(est.id));
+    li.appendChild(btn); lista.appendChild(li);
+  });
+}
+
+function seleccionarSalaParaEditar(id){
+  const est = estacionesContenido.find((e)=>Number(e.id)===Number(id));
+  if(!est) return;
+  salaEditandoId = est.id;
+  document.querySelectorAll('#lista-salas-contenido button').forEach((b)=>{
+    b.setAttribute('aria-pressed', Number(b.dataset.salaId)===Number(id) ? 'true':'false');
+  });
+  formContenido = {
+    titulo: est.titulo||'', pilar: est.pilar||'', narrativa: est.narrativa||'', reto: est.reto||'',
+    feedback_ok: est.feedback_ok||'', datosLista: objetoADatosLista(est.datos),
+    pistas: Array.isArray(est.pistas) ? est.pistas.slice() : []
+  };
+  if($('input-titulo-sala')) $('input-titulo-sala').value = formContenido.titulo;
+  if($('input-pilar-sala')) $('input-pilar-sala').value = formContenido.pilar;
+  if($('input-narrativa-sala')) $('input-narrativa-sala').value = formContenido.narrativa;
+  if($('input-reto-sala')) $('input-reto-sala').value = formContenido.reto;
+  if($('input-feedback-ok-sala')) $('input-feedback-ok-sala').value = formContenido.feedback_ok;
+  renderizarEditorDatos();
+  renderizarEditorPistas();
+  actualizarVistaPreviaContenido();
+  $('form-contenido-sala')?.removeAttribute('hidden');
+}
+
+function renderizarEditorDatos(){
+  const cont = $('editor-datos-lista');
+  if(!cont) return;
+  limpiarTabla(cont);
+  formContenido.datosLista.forEach((fila, idx)=> cont.appendChild(construirFilaDato(fila, idx)));
+}
+
+function construirFilaDato(fila, idx){
+  const wrap=document.createElement('div'); wrap.className='fila-dato space-y-2';
+  const cabecera=document.createElement('div'); cabecera.className='flex flex-wrap items-center gap-2';
+
+  const inputClave=document.createElement('input'); inputClave.type='text'; inputClave.value=fila.clave;
+  inputClave.placeholder='nombre_del_dato';
+  inputClave.setAttribute('aria-label','Nombre del dato');
+  inputClave.className='flex-1 min-w-[160px] bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+  inputClave.addEventListener('input', ()=>{ fila.clave=inputClave.value; actualizarVistaPreviaContenido(); });
+
+  const selectTipo=document.createElement('select');
+  selectTipo.setAttribute('aria-label','Tipo de dato');
+  selectTipo.className='bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+  [['texto','Texto'],['lista','Lista'],['objeto','Objeto']].forEach(([v,t])=>{
+    const op=document.createElement('option'); op.value=v; op.textContent=t; if(fila.tipo===v) op.selected=true; selectTipo.appendChild(op);
+  });
+  selectTipo.addEventListener('change', ()=>{
+    fila.tipo = selectTipo.value;
+    if(fila.tipo==='texto' && fila.valor==null) fila.valor='';
+    if(fila.tipo==='lista' && !fila.items) fila.items=[];
+    if(fila.tipo==='objeto' && !fila.pares) fila.pares=[];
+    renderizarEditorDatos();
+    actualizarVistaPreviaContenido();
+  });
+
+  const btnQuitar=document.createElement('button'); btnQuitar.type='button'; btnQuitar.textContent='Quitar';
+  btnQuitar.className='font-evidence-data text-xs uppercase border border-error text-error px-2 py-1 hover:bg-error hover:text-on-error';
+  btnQuitar.addEventListener('click', ()=>{
+    formContenido.datosLista.splice(idx,1);
+    renderizarEditorDatos();
+    actualizarVistaPreviaContenido();
+  });
+
+  cabecera.appendChild(inputClave); cabecera.appendChild(selectTipo); cabecera.appendChild(btnQuitar);
+  wrap.appendChild(cabecera);
+  wrap.appendChild(construirSubEditorDato(fila));
+  return wrap;
+}
+
+function construirSubEditorDato(fila){
+  if(fila.tipo==='lista'){
+    const cont=document.createElement('div'); cont.className='space-y-1 pl-2';
+    (fila.items||[]).forEach((item, i)=>{
+      const filaEl=document.createElement('div'); filaEl.className='flex gap-2';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=item; inp.setAttribute('aria-label','Línea de la lista');
+      inp.className='flex-1 bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+      inp.addEventListener('input', ()=>{ fila.items[i]=inp.value; actualizarVistaPreviaContenido(); });
+      const quitar=document.createElement('button'); quitar.type='button'; quitar.textContent='×'; quitar.setAttribute('aria-label','Quitar línea');
+      quitar.className='font-evidence-data text-xs border border-error text-error px-2 hover:bg-error hover:text-on-error';
+      quitar.addEventListener('click', ()=>{ fila.items.splice(i,1); renderizarEditorDatos(); actualizarVistaPreviaContenido(); });
+      filaEl.appendChild(inp); filaEl.appendChild(quitar); cont.appendChild(filaEl);
+    });
+    const agregar=document.createElement('button'); agregar.type='button'; agregar.textContent='+ línea';
+    agregar.className='font-evidence-data text-xs uppercase text-primary hover:underline';
+    agregar.addEventListener('click', ()=>{ fila.items.push(''); renderizarEditorDatos(); });
+    cont.appendChild(agregar);
+    return cont;
+  }
+  if(fila.tipo==='objeto'){
+    const cont=document.createElement('div'); cont.className='space-y-1 pl-2';
+    (fila.pares||[]).forEach((par, i)=>{
+      const filaEl=document.createElement('div'); filaEl.className='flex gap-2';
+      const inpK=document.createElement('input'); inpK.type='text'; inpK.value=par.clave; inpK.placeholder='clave'; inpK.setAttribute('aria-label','Sub-clave');
+      inpK.className='w-1/3 bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+      inpK.addEventListener('input', ()=>{ par.clave=inpK.value; actualizarVistaPreviaContenido(); });
+      const inpV=document.createElement('input'); inpV.type='text'; inpV.value=par.valor; inpV.placeholder='valor'; inpV.setAttribute('aria-label','Sub-valor');
+      inpV.className='flex-1 bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+      inpV.addEventListener('input', ()=>{ par.valor=inpV.value; actualizarVistaPreviaContenido(); });
+      const quitar=document.createElement('button'); quitar.type='button'; quitar.textContent='×'; quitar.setAttribute('aria-label','Quitar par');
+      quitar.className='font-evidence-data text-xs border border-error text-error px-2 hover:bg-error hover:text-on-error';
+      quitar.addEventListener('click', ()=>{ fila.pares.splice(i,1); renderizarEditorDatos(); actualizarVistaPreviaContenido(); });
+      filaEl.appendChild(inpK); filaEl.appendChild(inpV); filaEl.appendChild(quitar); cont.appendChild(filaEl);
+    });
+    const agregar=document.createElement('button'); agregar.type='button'; agregar.textContent='+ par clave/valor';
+    agregar.className='font-evidence-data text-xs uppercase text-primary hover:underline';
+    agregar.addEventListener('click', ()=>{ fila.pares.push({ clave:'', valor:'' }); renderizarEditorDatos(); });
+    cont.appendChild(agregar);
+    return cont;
+  }
+  // texto
+  const cont=document.createElement('div'); cont.className='pl-2';
+  const ta=document.createElement('textarea'); ta.rows=2; ta.value=fila.valor||''; ta.setAttribute('aria-label','Valor del dato');
+  ta.className='w-full bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+  ta.addEventListener('input', ()=>{ fila.valor=ta.value; actualizarVistaPreviaContenido(); });
+  cont.appendChild(ta);
+  return cont;
+}
+
+function renderizarEditorPistas(){
+  const cont = $('editor-pistas-lista');
+  if(!cont) return;
+  limpiarTabla(cont);
+  formContenido.pistas.forEach((texto, i)=>{
+    const fila=document.createElement('div'); fila.className='fila-pista flex gap-2 items-start';
+    const ta=document.createElement('textarea'); ta.rows=2; ta.value=texto; ta.setAttribute('aria-label', `Pista ${i+1}`);
+    ta.className='flex-1 bg-surface-container-low border border-audit-border rounded px-2 py-1 font-evidence-data text-xs text-on-surface';
+    ta.addEventListener('input', ()=>{ formContenido.pistas[i]=ta.value; });
+    const quitar=document.createElement('button'); quitar.type='button'; quitar.textContent='Quitar';
+    quitar.className='font-evidence-data text-xs uppercase border border-error text-error px-2 py-1 hover:bg-error hover:text-on-error self-start';
+    quitar.addEventListener('click', ()=>{ formContenido.pistas.splice(i,1); renderizarEditorPistas(); });
+    fila.appendChild(ta); fila.appendChild(quitar); cont.appendChild(fila);
+  });
+}
+
+// Vista previa en vivo: literalmente el mismo renderer que ve el estudiante
+// (js/contenido-render.js), nunca una reconstrucción aparte.
+function actualizarVistaPreviaContenido(){
+  setText('prev-titulo', formContenido.titulo || (salaEditandoId ? `Estación ${salaEditandoId}` : ''));
+  setText('prev-pilar', formContenido.pilar);
+  pintarNarrativaEstacion($('prev-narrativa'), formContenido.narrativa);
+  const datosEl = $('prev-datos');
+  if(datosEl) pintarDatosEstacion(datosEl, datosListaAObjeto(formContenido.datosLista));
+  pintarRetoEstacion($('prev-reto-texto'), formContenido.reto);
+}
+
+async function guardarContenidoSala(){
+  if(!salaEditandoId){ mostrarMensajeDocente('Elegí una sala para editar.'); return; }
+  const payload = {
+    titulo: ($('input-titulo-sala')?.value||'').trim(),
+    pilar: ($('input-pilar-sala')?.value||'').trim(),
+    narrativa: $('input-narrativa-sala')?.value||'',
+    reto: $('input-reto-sala')?.value||'',
+    feedback_ok: $('input-feedback-ok-sala')?.value||'',
+    // pistas en blanco se descartan acá (no cuentan como "una pista" real);
+    // el servidor de todos modos rechaza cualquier string vacío que llegara.
+    pistas: formContenido.pistas.map((p)=>String(p||'').trim()).filter((p)=>p.length>0),
+    datos: datosListaAObjeto(formContenido.datosLista)
+  };
+  if(!payload.titulo || !payload.pilar || !payload.narrativa.trim() || !payload.reto.trim() || !payload.feedback_ok.trim()){
+    mostrarMensajeDocente('Título, pilar, narrativa, reto y mensaje de acierto no pueden quedar vacíos.');
+    return;
+  }
+  if(Object.keys(payload.datos).length===0){
+    mostrarMensajeDocente('Agregá al menos un dato del expediente antes de guardar.');
+    return;
+  }
+  if(!confirm(`¿Guardar cambios en "Sala ${salaEditandoId}"? Esto cambia lo que ven TODOS los equipos de todos los docentes, no solo los tuyos.`)) return;
+  const {error} = await Docente.actualizarEstacion(salaEditandoId, payload);
+  if(error){ mostrarMensajeDocente(error.mensaje||'No se pudo guardar el contenido.'); return; }
+  const idGuardado = salaEditandoId;
+  await cargarContenidoSalas(); // recarga desde el servidor: el form refleja lo que realmente quedó guardado
+  seleccionarSalaParaEditar(idGuardado);
+  mostrarMensajeDocente(`Contenido de "Sala ${idGuardado}" guardado.`, 'ok');
+}
+
+function enlazarEventosContenido(){
+  $('input-titulo-sala')?.addEventListener('input', (e)=>{ formContenido.titulo=e.target.value; actualizarVistaPreviaContenido(); });
+  $('input-pilar-sala')?.addEventListener('input', (e)=>{ formContenido.pilar=e.target.value; actualizarVistaPreviaContenido(); });
+  $('input-narrativa-sala')?.addEventListener('input', (e)=>{ formContenido.narrativa=e.target.value; actualizarVistaPreviaContenido(); });
+  $('input-reto-sala')?.addEventListener('input', (e)=>{ formContenido.reto=e.target.value; actualizarVistaPreviaContenido(); });
+  $('input-feedback-ok-sala')?.addEventListener('input', (e)=>{ formContenido.feedback_ok=e.target.value; });
+  $('btn-agregar-dato')?.addEventListener('click', ()=>{
+    formContenido.datosLista.push({ clave:'', tipo:'texto', valor:'' });
+    renderizarEditorDatos();
+  });
+  $('btn-agregar-pista')?.addEventListener('click', ()=>{
+    formContenido.pistas.push('');
+    renderizarEditorPistas();
+  });
+  $('btn-guardar-contenido-sala')?.addEventListener('click', guardarContenidoSala);
 }
 
 // "Ver sesión en curso" (2026-08-26): solo tiene sentido cuando hay algo

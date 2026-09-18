@@ -7,6 +7,13 @@ const router = Router();
 // helper: verificar rol docente (RLS ya lo hace, pero early 403)
 function esDocente(perfil){ return perfil?.rol==='docente'; }
 
+// mismo criterio que generar-codigo-personal (srv/rutas/auth.js): defensa en
+// profundidad además de la RLS de sql/06-superadmin.sql — nunca depender de
+// una sola capa para algo que rompe el caso para TODOS los equipos si falla.
+function esSuperAdmin(perfil){
+  return String(perfil?.correo||'').trim().toLowerCase() === 'fglopez@monicaherrera.edu.sv';
+}
+
 // Código de equipo legible: 6 caracteres, mayúsculas+dígitos, sin 0/O/1/I
 // (se confunden fácil al leerlo en voz alta o proyectado). No es para
 // resistir fuerza bruta a gran escala — es para que un equipo de 3 personas
@@ -282,6 +289,84 @@ router.post('/calificaciones/:equipo', async (req,res)=>{
     res.json(row);
   }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
 });
+// ---------------------------------------------------------------------------
+// Editor de contenido de las 5 salas (2026-09-02) — solo fglopez. El
+// contenido es una sola tabla compartida por todas las sesiones de todos
+// los docentes; un error de cualquiera rompe el caso para todos, por eso
+// esto NO es una capacidad de docente normal (a diferencia del resto de
+// este archivo, gateado por RLS de `docente_id`). interaccion/codigo/
+// respuesta quedan fuera a propósito — nunca se nombran en el UPDATE — se
+// siguen editando solo por sql/05-seed.sql.
+// ---------------------------------------------------------------------------
+
+// Forma válida de un VALOR de `datos` (una clave del objeto): string, array
+// de strings, o un nivel de objeto de strings — los 3 casos reales que ya
+// existen en sql/05-seed.sql (texto simple, huella hídrica en lista,
+// reparto_taza de Sala del Dinero). Cualquier otra forma se rechaza — nunca
+// se relaja esto, es la lección del salto de línea que rompió el JSON.
+function formaValidaDeDato(valor){
+  if (typeof valor === 'string') return true;
+  if (Array.isArray(valor)) return valor.every((v) => typeof v === 'string');
+  if (valor && typeof valor === 'object') return Object.values(valor).every((v) => typeof v === 'string');
+  return false;
+}
+function validarDatos(datos){
+  if (!datos || typeof datos !== 'object' || Array.isArray(datos)) return false;
+  return Object.values(datos).every(formaValidaDeDato);
+}
+
+// GET /estaciones — trae TODO (incluidas pistas/feedback_ok, que
+// estaciones_publicas oculta a estudiantes) para poblar el editor.
+router.get('/estaciones', async (req,res)=>{
+  if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
+  if(!esSuperAdmin(req.perfil)) return res.status(403).json({ error:'no_autorizado' });
+  try{
+    const rows = await conSesion(req.perfil.id, async c=>{
+      const q = await c.query('SELECT * FROM estaciones ORDER BY id');
+      return q.rows;
+    });
+    res.json(rows);
+  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
+});
+
+// PUT /estaciones/:id — valida el body ANTES de tocar la base. Si algo no
+// valida: 400 { error:'dato_invalido', campo } y la base ni se toca — nunca
+// un 500 genérico ni un guardado parcial.
+router.put('/estaciones/:id', async (req,res)=>{
+  if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
+  if(!esSuperAdmin(req.perfil)) return res.status(403).json({ error:'no_autorizado' });
+  const id = Number(req.params.id);
+  if(!Number.isInteger(id) || id<1 || id>5) return res.status(400).json({ error:'dato_invalido', campo:'id' });
+
+  const b = req.body||{};
+  for(const campo of ['titulo','pilar','narrativa','reto','feedback_ok']){
+    if(typeof b[campo] !== 'string' || !b[campo].trim()) return res.status(400).json({ error:'dato_invalido', campo });
+  }
+  if(!Array.isArray(b.pistas) || !b.pistas.every((p) => typeof p==='string' && p.trim())) {
+    return res.status(400).json({ error:'dato_invalido', campo:'pistas' });
+  }
+  if(!validarDatos(b.datos)) return res.status(400).json({ error:'dato_invalido', campo:'datos' });
+
+  try{
+    const row = await conSesion(req.perfil.id, async c=>{
+      // JSON.stringify explícito en AMBOS — no alcanza con pasar el objeto/
+      // array de JS tal cual: el driver `pg` convierte un Array JS en la
+      // sintaxis de ARRAY nativo de Postgres ("{a,b}", no JSON), y eso
+      // rompe una columna jsonb con "Expected ':', but found ','" (probado
+      // contra Postgres real). Un objeto plano sí lo serializa bien solo,
+      // pero se deja explícito en los dos para no depender de esa asimetría.
+      const q = await c.query(
+        `UPDATE estaciones SET titulo=$1, pilar=$2, narrativa=$3, reto=$4, datos=$5, pistas=$6, feedback_ok=$7
+         WHERE id=$8 RETURNING *`,
+        [b.titulo.trim(), b.pilar.trim(), b.narrativa.trim(), b.reto.trim(), JSON.stringify(b.datos), JSON.stringify(b.pistas), b.feedback_ok.trim(), id]
+      );
+      return q.rows[0];
+    });
+    if(!row) return res.status(404).json({ error:'no_encontrada' });
+    res.json(row);
+  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
+});
+
 router.post('/anonimizar/:sesion', async (req,res)=>{
   if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
   try{

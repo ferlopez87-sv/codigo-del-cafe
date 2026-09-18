@@ -15,6 +15,15 @@ body{background:#131313;color:#e5e2e1}
 :focus-visible{outline:2px solid #88d982;outline-offset:2px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .stamp-rotation{transform:rotate(-2deg)}
+/* Editor de contenido (2026-09-02): la vista previa reusa js/contenido-render.js
+   (mismo código que pinta #panel-estacion en juego.html) — reusa también su
+   CSS, para que sea una vista previa fiel y no una aproximación. */
+.exhibit{border:1px solid #2C2F33;background:#F5F5DC;color:#121212;padding:12px}
+.exhibit__etiqueta{font-family:'JetBrains Mono';font-size:12px;text-transform:uppercase;opacity:.6}
+.exhibit__valor{font-family:'JetBrains Mono';font-size:14px}
+#prev-feedback{white-space:pre-line}
+#form-contenido-sala[hidden]{display:none}
+.fila-dato,.fila-pista{border:1px solid #2C2F33;background:#1c1b1b;padding:10px;border-radius:4px}
 </style>
 </head>
 <body class="font-body-md bg-background text-on-background flex flex-col md:flex-row min-h-screen antialiased">
@@ -141,6 +150,46 @@ body{background:#131313;color:#e5e2e1}
 <!-- SUPER-ADMIN §9.1.15 -->
 <section id="consola-super-admin" aria-labelledby="consola-titulo" class="border border-primary bg-surface-container p-6" hidden>
 <h2 id="consola-titulo" class="font-headline-md text-primary">Consola de control / super-admin</h2><p class="font-label-sm text-on-surface-variant">Visible solo para fglopez@monicaherrera.edu.sv — listado de todas las sesiones/equipos.</p><div id="consola-contenido" class="mt-4 font-evidence-data text-sm"></div>
+
+<div id="editor-contenido-salas" class="mt-8 pt-6 border-t border-audit-border">
+<h3 class="font-headline-md text-primary">Contenido de las salas</h3>
+<p class="font-label-sm text-on-surface-variant mb-4">Editá título, narrativa, datos del expediente, reto, pistas y mensaje de acierto. Cambio global: afecta lo que ven TODOS los equipos de todos los docentes, no solo los tuyos. La interacción, el código y la respuesta correcta no son editables acá — se siguen editando en <code>sql/05-seed.sql</code>.</p>
+<div class="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+<ul id="lista-salas-contenido" role="list" aria-label="Salas" class="space-y-1"></ul>
+<div id="form-contenido-sala" hidden class="space-y-6">
+<div class="grid sm:grid-cols-2 gap-4">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="input-titulo-sala" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Pilar</span><input id="input-pilar-sala" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+</div>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Narrativa <span class="normal-case opacity-70">— usá &lt;b&gt;texto&lt;/b&gt; para negrita</span></span><textarea id="input-narrativa-sala" rows="6" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-body-md"></textarea></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Reto</span><textarea id="input-reto-sala" rows="3" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-body-md"></textarea></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Mensaje de acierto (feedback_ok)</span><textarea id="input-feedback-ok-sala" rows="4" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data"></textarea></label>
+
+<div>
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Datos del expediente</span><button id="btn-agregar-dato" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar dato</button></div>
+<div id="editor-datos-lista" class="mt-2 space-y-3"></div>
+</div>
+
+<div>
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Pistas</span><button id="btn-agregar-pista" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar pista</button></div>
+<div id="editor-pistas-lista" class="mt-2 space-y-2"></div>
+</div>
+
+<div class="border border-audit-border bg-surface-container-low p-4">
+<p class="font-label-sm text-on-surface-variant uppercase mb-3">Vista previa — lo que ve el equipo</p>
+<div class="bg-background p-4 rounded">
+<h4 id="prev-titulo" class="font-headline-lg text-headline-lg"></h4>
+<p id="prev-pilar" class="font-label-sm text-label-sm uppercase text-on-surface-variant"></p>
+<div id="prev-narrativa" class="mt-4 font-body-md text-on-surface-variant leading-relaxed"></div>
+<div id="prev-datos" class="mt-6 grid gap-3"></div>
+<div class="mt-6 bg-surface-graphite border border-audit-border p-4"><p id="prev-reto-texto" class="font-evidence-data text-evidence-data"><strong>Reto:</strong></p></div>
+</div>
+</div>
+
+<button id="btn-guardar-contenido-sala" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary">Guardar cambios</button>
+</div>
+</div>
+</div>
 </section>
 
 </div>

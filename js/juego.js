@@ -13,6 +13,14 @@ import { Auth, Juego } from './api.js';
 import { renderInteraccion, serializarRespuesta } from './render.js';
 import { sincronizarDesdeEstado, onTiempoAgotado } from './timer.js';
 import { ESTACIONES_UI } from './contenido.js';
+import {
+  humanizarClave,
+  pintarConNegritas,
+  pintarValorDato,
+  pintarDatosEstacion,
+  pintarNarrativaEstacion,
+  pintarRetoEstacion,
+} from './contenido-render.js';
 
 // ---------------------------------------------------------------------------
 // Estado global — memoria volátil del módulo, no persiste en localStorage.
@@ -139,63 +147,6 @@ function prepararInteraccion(estacion) {
 // Pintado del contenido real de la estación dentro de #panel-estacion (§7.2, §11, §14.4)
 // Todo con textContent/createElement — nunca innerHTML con datos del servidor.
 // ---------------------------------------------------------------------------
-function humanizarClave(clave) {
-  const s = String(clave ?? '').replace(/_/g, ' ');
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function pintarValorDato(contenedorDd, valor) {
-  if (Array.isArray(valor)) {
-    const ul = document.createElement('ul');
-    valor.forEach((item) => {
-      const li = document.createElement('li');
-      // 2026-08-28: mismo reconocimiento de <b> que la narrativa (_pintarConNegritas,
-      // más abajo en este archivo — function declaration, se puede llamar desde
-      // acá aunque esté definida después) — un ítem de datos también puede pedir
-      // negrita (ej. "Huella total" de Sala Verde), y sin esto se vería literal.
-      if (item && typeof item === 'object') li.textContent = JSON.stringify(item);
-      else _pintarConNegritas(li, String(item));
-      ul.appendChild(li);
-    });
-    contenedorDd.appendChild(ul);
-  } else if (valor && typeof valor === 'object') {
-    const subDl = document.createElement('dl');
-    Object.entries(valor).forEach(([k, v]) => {
-      const dt = document.createElement('dt');
-      dt.textContent = humanizarClave(k);
-      const dd = document.createElement('dd');
-      pintarValorDato(dd, v);
-      subDl.appendChild(dt);
-      subDl.appendChild(dd);
-    });
-    contenedorDd.appendChild(subDl);
-  } else {
-    _pintarConNegritas(contenedorDd, valor == null ? '' : String(valor));
-  }
-}
-
-// Cada dato del expediente se pinta como una tarjeta .exhibit (Stitch v2,
-// diseño "Forensic Audit Protocol" — superficie color papel, ver styles.css
-// §11.1). Antes era un <dl> plano; una tarjeta por dato es lo que hace que
-// el dato se lea como evidencia y no como una lista de configuración.
-function pintarDatosEstacion(contenedor, datos) {
-  while (contenedor.firstChild) contenedor.removeChild(contenedor.firstChild);
-  if (!datos || typeof datos !== 'object') return;
-  Object.entries(datos).forEach(([clave, valor]) => {
-    const tarjeta = document.createElement('div');
-    tarjeta.className = 'exhibit';
-    const etiqueta = document.createElement('span');
-    etiqueta.className = 'exhibit__etiqueta';
-    etiqueta.textContent = humanizarClave(clave);
-    const cuerpo = document.createElement('p');
-    cuerpo.className = 'exhibit__valor';
-    pintarValorDato(cuerpo, valor);
-    tarjeta.appendChild(etiqueta);
-    tarjeta.appendChild(cuerpo);
-    contenedor.appendChild(tarjeta);
-  });
-}
-
 function pintarTituloEstacion(estacion) {
   // #estacion-titulo (CONTRACT §7.2): antes #modal-estacion-titulo, renombrado
   // porque ya no vive dentro de un diálogo modal.
@@ -203,52 +154,6 @@ function pintarTituloEstacion(estacion) {
   if (h2) h2.textContent = estacion.titulo || `Estación ${estacion.id}`;
   const pilarEl = $('estacion-pilar');
   if (pilarEl) pilarEl.textContent = estacion.pilar || '';
-}
-
-// Reconoce ÚNICAMENTE <b>...</b> en el texto de contenido (CONTRACT §14.4:
-// nunca innerHTML con datos dinámicos) y arma <strong>/texto plano a mano —
-// cualquier otro `<...>` que aparezca en el contenido queda como texto
-// literal, igual que si esta función no existiera. 2026-08-28: antes
-// pintarNarrativaEstacion hacía p.textContent = texto directo, así que un
-// <b> ya presente en el contenido (Sala de Hechos) se veía literal
-// ("&lt;b&gt;...") en vez de negrita real — encontrado al verificar contra
-// el juego real el pedido de negrita en Sala Verde.
-function _pintarConNegritas(contenedor, texto) {
-  const partes = String(texto || '').split(/<b>(.*?)<\/b>/);
-  partes.forEach((parte, i) => {
-    if (!parte) return;
-    if (i % 2 === 1) {
-      const strong = document.createElement('strong');
-      strong.textContent = parte;
-      contenedor.appendChild(strong);
-    } else {
-      contenedor.appendChild(document.createTextNode(parte));
-    }
-  });
-}
-
-function pintarNarrativaEstacion(texto) {
-  const cont = $('estacion-narrativa');
-  if (!cont) return;
-  while (cont.firstChild) cont.removeChild(cont.firstChild);
-  const p = document.createElement('p');
-  _pintarConNegritas(p, texto);
-  cont.appendChild(p);
-}
-
-function pintarRetoEstacion(texto) {
-  const el = $('estacion-reto-texto');
-  if (!el) return;
-  const strongPrevio = el.querySelector('strong');
-  while (el.firstChild) el.removeChild(el.firstChild);
-  if (strongPrevio) {
-    el.appendChild(strongPrevio);
-  } else {
-    const s = document.createElement('strong');
-    s.textContent = 'Reto:';
-    el.appendChild(s);
-  }
-  el.appendChild(document.createTextNode(' ' + (texto || '')));
 }
 
 async function pintarEstacionEnPanel(id) {
@@ -264,12 +169,12 @@ async function pintarEstacionEnPanel(id) {
   }
 
   pintarTituloEstacion(estacion);
-  pintarNarrativaEstacion(estacion.narrativa);
+  pintarNarrativaEstacion($('estacion-narrativa'), estacion.narrativa);
 
   const datosEl = $('estacion-datos');
   if (datosEl) pintarDatosEstacion(datosEl, estacion.datos);
 
-  pintarRetoEstacion(estacion.reto);
+  pintarRetoEstacion($('estacion-reto-texto'), estacion.reto);
 
   // 2026-08-28, pedido de Fernando: el mensaje de confirmación de una sala ya
   // resuelta debe seguir visible al volver a entrar, no solo justo después de
@@ -1025,11 +930,11 @@ function mensajeDetalle(detalle) {
 function mostrarFeedbackEstacion(texto, estado, intentosTexto) {
   const fb = $('estacion-feedback');
   if (!fb) return;
-  // Mismo reconocimiento de <b> que narrativa/datos (_pintarConNegritas) —
-  // el mensaje de confirmación (feedback_ok) también puede traer negrita,
-  // ej. el "Código: X" que hace falta para la Sala 5.
+  // Mismo reconocimiento de <b> que narrativa/datos (pintarConNegritas,
+  // js/contenido-render.js) — el mensaje de confirmación (feedback_ok)
+  // también puede traer negrita, ej. el "Código: X" que hace falta para la Sala 5.
   while (fb.firstChild) fb.removeChild(fb.firstChild);
-  _pintarConNegritas(fb, texto);
+  pintarConNegritas(fb, texto);
   fb.setAttribute('role', 'status');
   fb.setAttribute('aria-live', 'polite');
   fb.setAttribute('aria-atomic', 'true');

@@ -167,5 +167,12 @@ export const Docente = {
   async anonimizar(sesionId) {
     if (!sesionId) return { datos: null, error: { mensaje: 'Falta sesionId.', codigo: 'parametros_faltantes', estado: 400 } };
     return peticion(`/api/docente/anonimizar/${encodeURIComponent(sesionId)}`, { method: 'POST', body: {} });
+  },
+  // Editor de contenido de salas (2026-09-02) — solo fglopez; RLS +
+  // gate por correo en srv/rutas/docente.js son la autoridad real.
+  async estaciones() { return peticion('/api/docente/estaciones', { method: 'GET' }); },
+  async actualizarEstacion(id, payload) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/estaciones/${encodeURIComponent(id)}`, { method: 'PUT', body: payload || {} });
   }
 };

@@ -47,6 +47,15 @@ drop policy if exists nomina_super_admin on nomina;
 create policy nomina_super_admin on nomina for all to public
   using (es_super_admin()) with check (es_super_admin());
 
+-- estaciones: editor de contenido (2026-09-02) — sin política propia esta
+-- tabla es deny-all siempre (sql/02-rls.sql), incluso para fglopez. La
+-- ruta Express (srv/rutas/docente.js) es la que evita tocar interaccion/
+-- codigo/respuesta (RLS controla filas, no columnas) y valida la forma de
+-- datos/pistas antes de escribir — acá solo se abre la fila para super-admin.
+drop policy if exists estaciones_super_admin on estaciones;
+create policy estaciones_super_admin on estaciones for all to public
+  using (es_super_admin()) with check (es_super_admin());
+
 -- intentos / progreso / calificaciones: solo select (igual que docente; se
 -- escriben desde verificar_estacion()/rutas ya existentes, no directo)
 drop policy if exists intentos_super_admin on intentos;
