@@ -1,7 +1,7 @@
 <!DOCTYPE html><html class="dark" lang="es-SV"><head>
 <meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport">
-<meta name="description" content="Misión: El código secreto del café — escape room. Sala de juego.">
-<title>Misión: El código secreto del café — Juego</title>
+<meta name="description" content="Escape room de auditoría de sostenibilidad — sala de juego.">
+<title>Escape Room — Sala de juego</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;500;800&display=swap" rel="stylesheet">
@@ -148,7 +148,7 @@ body{background:#121212;color:#e5e2e1}
 <nav id="sidebar-salas" class="fixed inset-y-0 left-0 z-30 flex flex-col h-full py-6 w-sidebar-width bg-surface-container border-r border-audit-border shrink-0 -translate-x-full md:translate-x-0 md:static md:flex transition-transform duration-200" aria-label="Equipo, tiempo y salas">
 <button id="btn-cerrar-menu-mobile" type="button" class="md:hidden absolute top-3 right-3 p-2 text-on-surface-variant hover:text-on-surface" aria-label="Cerrar menú de salas"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
 <div class="px-6 mb-6 border-b border-audit-border pb-6">
-<div class="font-stamp-lg text-stamp-lg text-on-surface-variant opacity-50 mb-4 truncate">Misión: El código secreto del café</div>
+<div id="nombre-mision" class="font-stamp-lg text-stamp-lg text-on-surface-variant opacity-50 mb-4 truncate">Escape room de auditoría</div>
 <h1 class="font-headline-md text-headline-md text-primary uppercase">Tablero de auditoría</h1>
 <p id="nombre-equipo-activo" class="font-evidence-data text-evidence-data text-on-surface mt-1" aria-live="polite">—</p>
 <p id="usuario-actual" class="font-label-sm text-label-sm text-on-surface-variant mt-1 flex items-center gap-1" aria-live="polite"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">person</span><span id="usuario-actual-texto">—</span></p>
@@ -165,13 +165,17 @@ body{background:#121212;color:#e5e2e1}
 <span id="barra-progreso-label" class="sr-only">Progreso del equipo</span>
 </div>
 </div>
-<nav id="nav-salas" aria-label="Salas de la auditoría" class="flex-1 overflow-y-auto px-4 space-y-1">
-<button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" data-estacion="1" aria-current="false" aria-describedby="estado-estacion-1"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">fact_check</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 1</span><span class="font-evidence-data text-xs">Sala de Hechos</span></span></span><span id="estado-estacion-1" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">○ Pendiente</span></button>
-<button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" data-estacion="2" aria-current="false" aria-describedby="estado-estacion-2"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">water_drop</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 2</span><span class="font-evidence-data text-xs">Sala Verde</span></span></span><span id="estado-estacion-2" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">○ Pendiente</span></button>
-<button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" data-estacion="3" aria-current="false" aria-describedby="estado-estacion-3"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">payments</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 3</span><span class="font-evidence-data text-xs">Sala del Dinero</span></span></span><span id="estado-estacion-3" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">○ Pendiente</span></button>
-<button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" data-estacion="4" aria-current="false" aria-describedby="estado-estacion-4"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">groups</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 4</span><span class="font-evidence-data text-xs">Sala de las Personas</span></span></span><span id="estado-estacion-4" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">○ Pendiente</span></button>
-<button class="nav-sala estacion-card is-bloqueada w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group" data-estacion="5" aria-current="false" aria-disabled="true" aria-describedby="estado-estacion-5"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">gavel</span><span><span class="font-label-sm text-label-sm uppercase block">Sala 5</span><span class="font-evidence-data text-xs">Sala de la Verdad</span></span></span><span id="estado-estacion-5" class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded">🔒 Bloqueada</span></button>
-</nav>
+<!-- Plantilla de sala de la barra lateral (plan-motor-misiones.md §1, P3): antes
+     eran 5 <button> escritos a mano (uno por sala del caso CGC), lo que hacía
+     imposible que una misión con otra cantidad de salas o nombres distintos
+     se viera bien. js/juego.js clona esta plantilla por cada estación que
+     devuelve la API, en el orden de estaciones.orden. Conservar las clases
+     nav-sala/estacion-card/is-pendiente/is-bloqueada — el CSS de estado
+     depende de ellas. -->
+<template id="tpl-nav-sala">
+<button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" aria-current="false"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true" data-rol="icono">help</span><span><span class="font-label-sm text-label-sm uppercase block" data-rol="orden">Sala</span><span class="font-evidence-data text-xs" data-rol="titulo"></span></span></span><span class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded" data-rol="estado">○ Pendiente</span></button>
+</template>
+<nav id="nav-salas" aria-label="Salas de la auditoría" class="flex-1 overflow-y-auto px-4 space-y-1"></nav>
  <div class="px-6 mt-auto pt-6 border-t border-audit-border"><a href="index.html" class="w-full bg-surface-graphite border border-audit-border text-on-surface-variant hover:text-primary hover:border-primary font-evidence-data text-evidence-data uppercase py-3 flex justify-center items-center gap-2 no-underline"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir</a></div>
 </nav>
 <div id="backdrop-mobile" hidden class="fixed inset-0 bg-black/50 z-20 md:hidden" aria-hidden="true"></div>
@@ -201,7 +205,7 @@ body{background:#121212;color:#e5e2e1}
 <section id="pantalla-dashboard" role="region" aria-labelledby="dashboard-titulo" hidden class="flex-1 flex flex-col overflow-hidden">
 <h2 id="dashboard-titulo" class="sr-only" tabindex="-1">Tablero de la auditoría</h2>
 <div id="panel-estacion" class="flex-1 overflow-y-auto p-8 bg-surface" aria-live="polite">
-<div id="panel-estacion-vacio" class="max-w-3xl mx-auto text-center py-12"><span class="material-symbols-outlined text-4xl text-on-surface-variant opacity-50" aria-hidden="true">search</span><p class="font-body-md text-on-surface-variant mt-2">Elegí una sala en la barra lateral para empezar a auditar.</p><p class="font-label-sm text-label-sm text-on-surface-variant/70 mt-1">La Sala 5 se desbloquea al resolver las cuatro primeras.</p></div>
+<div id="panel-estacion-vacio" class="max-w-3xl mx-auto text-center py-12"><span class="material-symbols-outlined text-4xl text-on-surface-variant opacity-50" aria-hidden="true">search</span><p class="font-body-md text-on-surface-variant mt-2">Elegí una sala en la barra lateral para empezar a auditar.</p><p id="aviso-desbloqueo-final" hidden class="font-label-sm text-label-sm text-on-surface-variant/70 mt-1"></p></div>
 <div id="panel-estacion-contenido" hidden class="max-w-3xl mx-auto">
 <span class="font-label-sm text-label-sm uppercase tracking-widest text-primary border border-primary px-2 py-1" aria-hidden="true">Expediente_Sala</span>
 <h2 id="estacion-titulo" tabindex="-1" class="font-headline-lg text-headline-lg mt-3">Estación</h2>
@@ -209,6 +213,7 @@ body{background:#121212;color:#e5e2e1}
 <div id="estacion-narrativa" class="mt-4 font-body-md text-on-surface-variant leading-relaxed"></div>
 <div id="estacion-datos" class="mt-6 grid gap-3" role="region" aria-label="Datos del expediente"></div>
 <div id="estacion-reto" class="mt-6 bg-surface-graphite border border-audit-border p-4"><p id="estacion-reto-texto" class="font-evidence-data text-evidence-data"><strong class="text-primary">Reto:</strong> —</p></div>
+<div id="estacion-visual" class="mt-6" role="region" aria-label="Gráfico de la estación"></div>
 <div id="estacion-interaccion" class="mt-6" role="region" aria-label="Interacción de la estación"></div>
 <div id="aviso-solo-apuntador" role="status" aria-live="polite" hidden class="mt-4"><span class="material-symbols-outlined text-sm" aria-hidden="true">lock</span><span id="aviso-solo-apuntador-texto">Solo tu apuntador puede enviar la respuesta. Podés seguir el expediente y discutir con tu equipo.</span></div>
 <div id="estacion-feedback" role="status" aria-live="polite" aria-atomic="true" hidden class="mt-4 p-4 border border-audit-border font-evidence-data"></div>
@@ -235,10 +240,10 @@ body{background:#121212;color:#e5e2e1}
 <section id="pantalla-veredicto" role="region" aria-labelledby="veredicto-titulo" hidden class="p-8 max-w-3xl mx-auto w-full border-t border-audit-border mt-4">
 <div class="flex items-center gap-2 mb-2"><span class="border-2 border-tertiary-container text-tertiary-container px-2 py-1 font-stamp-lg text-xs rotate-[-2deg] opacity-80" aria-hidden="true">VEREDICTO FINAL</span></div>
 <h2 id="veredicto-titulo" tabindex="-1" class="font-headline-md text-headline-md">Veredicto de auditoría</h2>
-<p id="codigo-maestro-ayuda" class="font-body-md text-on-surface-variant mt-1">Ingresá el código maestro formado por los 5 fragmentos (ej. 06-87-04-2P-4). Se normaliza: mayúsculas, espacios y guiones opcionales.</p>
+<p id="codigo-maestro-ayuda" class="font-body-md text-on-surface-variant mt-1">Ingresá el código maestro formado por los fragmentos que conseguiste en cada sala. Se normaliza: mayúsculas, espacios y guiones opcionales.</p>
 <div class="mt-4 flex gap-3">
 <label class="sr-only" for="input-codigo-maestro">Código maestro</label>
-<input id="input-codigo-maestro" type="text" autocomplete="off" spellcheck="false" aria-describedby="codigo-maestro-ayuda feedback-maestro" aria-invalid="false" placeholder="06-87-04-2P-4" class="flex-1 bg-surface-graphite border border-audit-border text-primary font-evidence-data px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<input id="input-codigo-maestro" type="text" autocomplete="off" spellcheck="false" aria-describedby="codigo-maestro-ayuda feedback-maestro" aria-invalid="false" placeholder="Código maestro" class="flex-1 bg-surface-graphite border border-audit-border text-primary font-evidence-data px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none">
 <button id="btn-verificar-maestro" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary transition-colors" aria-describedby="feedback-maestro">Verificar código</button>
 </div>
 <div id="feedback-maestro" hidden role="status" aria-live="polite" aria-atomic="true" class="mt-3 p-3 border border-audit-border font-evidence-data"></div>

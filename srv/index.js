@@ -6,6 +6,8 @@ import { sesionMiddleware } from './middleware/sesion.js';
 import authRutas from './rutas/auth.js';
 import juegoRutas from './rutas/juego.js';
 import docenteRutas from './rutas/docente.js';
+import contenidoRutas from './rutas/contenido.js';
+import equiposRutas from './rutas/equipos.js';
 import { aplicarMigraciones } from './migrar.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,6 +25,8 @@ app.use(sesionMiddleware);
 app.use('/api/auth', authRutas);
 app.use('/api/juego', juegoRutas);
 app.use('/api/docente', docenteRutas);
+app.use('/api/docente/contenido', contenidoRutas);
+app.use('/api/docente', equiposRutas);
 
 app.get('/health', (req,res)=> res.json({ ok:true, t: new Date().toISOString() }));
 

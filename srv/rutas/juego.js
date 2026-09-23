@@ -15,11 +15,31 @@ router.get('/mi-equipo', async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
 });
 
+// P1 (plan-motor-misiones.md): antes hacía `SELECT * FROM estaciones_publicas
+// ORDER BY id` sin filtrar — devolvía TODAS las salas de TODAS las misiones a
+// cualquier estudiante autenticado. Ahora se limita a la misión de la sesión
+// del equipo de quien pregunta (perfil → integrantes → equipos → sesiones →
+// mision_id). `sesiones` tiene política RLS real de lectura para el propio
+// estudiante (sql/02-rls.sql, `sesiones_lectura_estudiante`) — no hace falta
+// tocar `misiones` (deny-all salvo super-admin, ver 06-superadmin.sql) porque
+// nunca se lee esa tabla directamente, solo `sesiones.mision_id`.
+// Mismo criterio de "equipo actual" que `mi_equipo()` (sql/03-funciones.sql):
+// `limit 1` sin order by, sin resolver histórico de más de un equipo.
 router.get('/estaciones', async (req,res)=>{
   if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
   try{
     const r = await conSesion(req.perfil.id, async (c)=>{
-      const q = await c.query('SELECT * FROM estaciones_publicas ORDER BY id');
+      const q = await c.query(`
+        SELECT ep.* FROM estaciones_publicas ep
+        WHERE ep.mision_id = (
+          SELECT s.mision_id
+          FROM equipos e
+          JOIN integrantes i ON i.equipo_id = e.id
+          JOIN sesiones s ON s.id = e.sesion_id
+          WHERE i.perfil_id = $1
+          LIMIT 1
+        )
+        ORDER BY ep.orden`, [req.perfil.id]);
       return q.rows;
     });
     res.json(r);

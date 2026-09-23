@@ -90,7 +90,7 @@ declare
   forzar boolean := (select rolsuper from pg_roles where rolname = current_user);
 begin
   foreach t in array array['perfiles','sesiones','equipos','integrantes','nomina',
-                            'estaciones','intentos','progreso','calificaciones',
+                            'misiones','estaciones','intentos','progreso','calificaciones',
                             'docentes_autorizados','configuracion'] loop
     execute format('alter table %I enable row level security', t);
     if forzar then

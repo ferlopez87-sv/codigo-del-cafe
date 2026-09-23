@@ -22,8 +22,53 @@ body{background:#131313;color:#e5e2e1}
 .exhibit__etiqueta{font-family:'JetBrains Mono';font-size:12px;text-transform:uppercase;opacity:.6}
 .exhibit__valor{font-family:'JetBrains Mono';font-size:14px}
 #prev-feedback{white-space:pre-line}
-#form-contenido-sala[hidden]{display:none}
+#form-sala[hidden]{display:none}
 .fila-dato,.fila-pista{border:1px solid #2C2F33;background:#1c1b1b;padding:10px;border-radius:4px}
+/* Constructor de reto (P5) — js/render.js (js/juego.js/juego.html §P2/P3) arma
+   estos elementos con estas MISMAS clases; docente.html nunca cargó ese CSS
+   porque no tenía el tablero de juego. Copiado literal de juego.html, no
+   aproximado — ya hubo un bug real en este proyecto por CSS "razonable" que
+   no era el real (tabla de dataviz sin estilo). Alcance con `.estacion-interaccion`
+   en vez del id `#estacion-interaccion` de juego.html: acá hay dos widgets
+   (marcar respuesta + probar sala) en la misma página. */
+.orden-zona{display:grid;gap:16px;margin-bottom:24px}
+.orden-ayuda{margin:0;font-size:12px;line-height:1.5;color:#bfcaba;border-left:2px solid #40493d;padding-left:12px}
+.orden-casillas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none}
+@media(min-width:560px){.orden-casillas{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.orden-casilla{position:relative;display:flex;align-items:center;justify-content:center;min-height:88px;padding:20px 8px 8px;background:#131313;border:1px dashed #6a716b;cursor:pointer}
+.orden-casilla__num{position:absolute;top:4px;left:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1;color:#8a9485}
+.orden-casilla[data-ocupada="true"]{border-style:solid;background:#1E1E1E}
+.orden-casilla[data-ocupada="true"] .orden-casilla__num{color:#88d982}
+.orden-casilla.is-sobre,.orden-bandeja.is-sobre{border-style:solid;border-color:#88d982;border-width:2px;background:rgba(136,217,130,.1)}
+.orden-casilla:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+.orden-tarjeta{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:8px 12px;font-family:'Hanken Grotesk',sans-serif;font-size:14px;line-height:1.3;color:#e5e2e1;background:#1E1E1E;border:1px solid #6a716b;box-shadow:0 1px 2px rgba(0,0,0,.45);cursor:grab;user-select:none}
+.orden-casilla .orden-tarjeta{width:100%;height:100%}
+.orden-tarjeta:hover{border-color:#88d982}
+.orden-tarjeta:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+.orden-tarjeta.is-arrastrando{opacity:.4;cursor:grabbing}
+.orden-tarjeta.is-levantada{border-color:#88d982;border-style:dashed;box-shadow:0 0 0 2px #88d982,0 4px 12px rgba(0,0,0,.5)}
+.orden-bandeja{display:flex;flex-wrap:wrap;gap:8px;min-height:60px;padding:12px;background:#1a1a1a;border:1px dashed #6a716b}
+.orden-bandeja[data-vacia="true"]::after{content:"Todas las tarjetas est\00E1n colocadas.";font-size:12px;color:#8a9485;align-self:center}
+.orden-zona--colocando .orden-casilla{border-color:#88d982}
+.estacion-interaccion select,.estacion-interaccion input[type="text"],.estacion-interaccion input[type="number"]{width:100%;max-width:32rem;min-height:44px;padding:8px 12px;font-family:'Hanken Grotesk',sans-serif;font-size:16px;line-height:1.5;color:#e5e2e1;background:#1E1E1E;border:1px solid #6a716b;border-radius:0}
+.estacion-interaccion select{appearance:none;-webkit-appearance:none;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,#bfcaba 50%),linear-gradient(135deg,#bfcaba 50%,transparent 50%);background-position:calc(100% - 18px) calc(50% - 3px),calc(100% - 12px) calc(50% - 3px);background-size:6px 6px,6px 6px;background-repeat:no-repeat;cursor:pointer}
+.estacion-interaccion select option{background:#1E1E1E;color:#e5e2e1}
+.estacion-interaccion select:focus-visible,.estacion-interaccion input:focus-visible{outline:2px solid #88d982;outline-offset:2px;border-color:#88d982}
+/* P6 — Armar equipos automáticamente (srv/rutas/equipos.js). Todo elemento
+   nuevo necesita su CSS acá: styles.css está muerto. */
+#bloque-armar-equipos{border:1px solid #2C2F33;background:#1c1b1b;padding:16px;border-radius:4px}
+#armar-modo,#armar-valor{min-height:44px;padding:8px 12px;font-family:'Hanken Grotesk',sans-serif;font-size:16px;line-height:1.5;color:#e5e2e1;background:#1E1E1E;border:1px solid #6a716b;border-radius:0}
+#armar-modo{appearance:none;-webkit-appearance:none;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,#bfcaba 50%),linear-gradient(135deg,#bfcaba 50%,transparent 50%);background-position:calc(100% - 18px) calc(50% - 3px),calc(100% - 12px) calc(50% - 3px);background-size:6px 6px,6px 6px;background-repeat:no-repeat;cursor:pointer}
+#armar-modo:focus-visible,#armar-valor:focus-visible{outline:2px solid #88d982;outline-offset:2px;border-color:#88d982}
+#btn-armar-equipos{min-height:44px}
+#btn-armar-equipos:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+#armar-resultado table{width:100%;border-collapse:collapse;font-size:14px}
+#armar-resultado th,#armar-resultado td{text-align:left;padding:8px 12px;border-bottom:1px solid #2C2F33}
+#armar-resultado th{font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;color:#8a9485}
+#armar-resultado td{font-family:'Hanken Grotesk',sans-serif;color:#e5e2e1}
+#armar-resultado tbody tr:nth-child(even){background:rgba(255,255,255,.03)}
+#btn-copiar-armar{min-height:44px}
+#btn-copiar-armar:focus-visible{outline:2px solid #88d982;outline-offset:2px}
 </style>
 </head>
 <body class="font-body-md bg-background text-on-background flex flex-col md:flex-row min-h-screen antialiased">
@@ -42,6 +87,7 @@ body{background:#131313;color:#e5e2e1}
 <a href="#sec-rubrica" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Rúbrica</a>
 <a href="#sec-cierre" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Cierre</a>
 <a href="#consola-super-admin" class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Consola</a>
+<a href="#sec-contenido" id="nav-contenido" hidden class="block px-3 py-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary">Contenido</a>
 </div>
 <div class="px-6 mt-auto pt-4 border-t border-audit-border"><a href="index.html" class="w-full flex justify-center items-center gap-2 border border-audit-border text-on-surface-variant py-2 font-evidence-data uppercase hover:border-primary hover:text-primary no-underline"><span class="material-symbols-outlined text-sm" aria-hidden="true">logout</span>Salir</a></div>
 </nav>
@@ -72,6 +118,7 @@ body{background:#131313;color:#e5e2e1}
 <form id="form-sesion" aria-labelledby="sesiones-titulo" class="space-y-4">
 <div><label class="font-label-sm text-label-sm uppercase font-bold" for="sesion-nombre">Nombre de la sesión</label><input id="sesion-nombre" name="nombre" type="text" required aria-required="true" placeholder="Ej. Sostenibilidad — Sección A — 2026" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none"></div>
 <div><label class="font-label-sm text-label-sm uppercase font-bold" for="sesion-duracion">Duración (minutos 5–180)</label><input id="sesion-duracion" name="duracion_minutos" type="number" inputmode="numeric" min="5" max="180" step="1" value="50" aria-describedby="sesion-duracion-ayuda" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary outline-none"><span id="sesion-duracion-ayuda" class="font-label-sm text-label-sm text-on-surface-variant">El reloj de clase lo controla la sesión.</span></div>
+<div id="sesion-mision-campo" hidden><label class="font-label-sm text-label-sm uppercase font-bold" for="sesion-mision">Misión</label><select id="sesion-mision" name="mision_id" class="mt-1 w-full bg-surface-graphite border border-audit-border text-on-surface px-3 py-2 focus:border-primary outline-none"></select><span class="font-label-sm text-label-sm text-on-surface-variant">Con una sola misión publicada, el servidor la usa sola. En cuanto hay dos o más, hay que elegir acá.</span></div>
 <button type="submit" class="w-full bg-surface-graphite border border-primary text-primary font-evidence-data uppercase py-3 hover:bg-primary hover:text-on-primary">Crear sesión</button>
 </form>
 </div>
@@ -104,6 +151,22 @@ body{background:#131313;color:#e5e2e1}
 <div id="lista-equipos" role="list" aria-label="Equipos" class="bg-surface border-x border-b border-audit-border rounded-b p-4 min-h-[300px] grid md:grid-cols-2 gap-4"></div>
 <div id="control-apuntador" hidden aria-hidden="true"></div>
 <div id="aviso-sin-apuntador" class="mt-3 p-3 border border-error bg-error-container/10 text-error font-evidence-data text-sm" hidden role="alert"><span class="material-symbols-outlined text-sm align-middle" aria-hidden="true">warning</span> Este equipo no tiene apuntador marcado. No podrá enviar respuestas hasta que elijas uno.</div>
+</div>
+</div>
+<!-- P6 — Armar equipos automáticamente -->
+<div id="bloque-armar-equipos" class="mt-6">
+<h3 class="font-evidence-data font-bold uppercase flex items-center gap-2"><span class="material-symbols-outlined text-primary text-sm" aria-hidden="true">auto_awesome</span>Armar equipos automáticamente</h3>
+<p class="font-body-md text-on-surface-variant mt-2">Reparte los estudiantes sin equipo. Respeta a los ya asignados y marca apuntador automáticamente.</p>
+<div class="flex flex-wrap gap-3 mt-4 items-end">
+<label class="flex flex-col gap-1"><span class="font-label-sm text-label-sm uppercase font-bold">Modo</span><select id="armar-modo" aria-label="Modo de armado"><option value="por_tamano">Por tamaño (ej. 4 por equipo)</option><option value="por_cantidad">Por cantidad (ej. 8 equipos)</option></select></label>
+<label class="flex flex-col gap-1"><span class="font-label-sm text-label-sm uppercase font-bold">Valor</span><input id="armar-valor" type="number" inputmode="numeric" min="1" max="50" step="1" value="4" aria-label="Valor"></label>
+<button id="btn-armar-equipos" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 hover:bg-primary hover:text-on-primary flex items-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">groups</span>Armar equipos</button>
+</div>
+<div id="armar-mensaje" role="alert" aria-live="assertive" aria-atomic="true" hidden class="mt-4 p-3 border font-evidence-data text-sm"></div>
+<div id="armar-resultado" hidden class="mt-4 space-y-3">
+<div class="p-3 border-2 border-error bg-error-container/20 text-error font-evidence-data text-sm" role="alert"><span class="material-symbols-outlined text-sm align-middle" aria-hidden="true">warning</span> <strong>Los códigos se ven una sola vez.</strong> El servidor solo guarda el hash. Si cerrás esta vista sin copiarlos, vas a tener que regenerarlos uno por uno con “Generar código de acceso”.</div>
+<div class="overflow-x-auto"><table id="tabla-armar" aria-label="Equipos armados automáticamente"><thead><tr><th>Equipo</th><th>Integrantes</th><th>Apuntador</th><th>Código</th></tr></thead><tbody></tbody></table></div>
+<button id="btn-copiar-armar" type="button" class="border border-audit-border text-on-surface-variant font-evidence-data uppercase px-4 hover:border-primary hover:text-primary flex items-center gap-2"><span class="material-symbols-outlined text-sm" aria-hidden="true">content_copy</span>Copiar todo</button>
 </div>
 </div>
 </section>
@@ -147,48 +210,165 @@ body{background:#131313;color:#e5e2e1}
 <button id="btn-anonimizar" class="mt-4 border border-error text-error font-evidence-data uppercase px-6 py-3 hover:bg-error hover:text-on-error" aria-label="Anonimizar sesión">Anonimizar sesión</button>
 </section>
 
-<!-- SUPER-ADMIN §9.1.15 -->
+<!-- SUPER-ADMIN §9.1.15 — Consola general -->
 <section id="consola-super-admin" aria-labelledby="consola-titulo" class="border border-primary bg-surface-container p-6" hidden>
-<h2 id="consola-titulo" class="font-headline-md text-primary">Consola de control / super-admin</h2><p class="font-label-sm text-on-surface-variant">Visible solo para fglopez@monicaherrera.edu.sv — listado de todas las sesiones/equipos.</p><div id="consola-contenido" class="mt-4 font-evidence-data text-sm"></div>
+<h2 id="consola-titulo" class="font-headline-md text-primary">Consola de control / super-admin</h2><p class="font-label-sm text-on-surface-variant">Visible solo para fglopez@monicaherrera.edu.sv — listado de todas las sesiones/equipos del sistema, no solo los propios.</p>
+<div id="consola-contenido" class="mt-4 font-evidence-data text-sm"></div>
+</section>
 
-<div id="editor-contenido-salas" class="mt-8 pt-6 border-t border-audit-border">
-<h3 class="font-headline-md text-primary">Contenido de las salas</h3>
-<p class="font-label-sm text-on-surface-variant mb-4">Editá título, narrativa, datos del expediente, reto, pistas y mensaje de acierto. Cambio global: afecta lo que ven TODOS los equipos de todos los docentes, no solo los tuyos. La interacción, el código y la respuesta correcta no son editables acá — se siguen editando en <code>sql/05-seed.sql</code>.</p>
-<div class="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
-<ul id="lista-salas-contenido" role="list" aria-label="Salas" class="space-y-1"></ul>
-<div id="form-contenido-sala" hidden class="space-y-6">
+<!-- CONTENIDO §9.1.16 — pestaña propia debajo de Consola, solo super-admin.
+     P5 (plan-motor-misiones.md): tres vistas dentro de esta MISMA sección,
+     nunca pantallas nuevas (CONTRACT.md:590 ya declara 16 sobre 15). -->
+<section id="sec-contenido" aria-labelledby="contenido-titulo" class="border border-primary bg-surface-container p-6" hidden>
+<h2 id="contenido-titulo" class="font-headline-md text-primary">Contenido de las misiones</h2>
+<div id="contenido-mensaje" role="alert" aria-live="assertive" aria-atomic="true" hidden class="p-3 mb-4 border border-error bg-error/10 text-error font-evidence-data text-sm"></div>
+
+<!-- Vista 1 — Biblioteca -->
+<div id="contenido-vista-biblioteca">
+<div class="flex items-center justify-between mb-4"><p class="font-label-sm text-on-surface-variant">Misiones existentes. Editar abre la Vista 2 (salas). Duplicar es la forma de reutilizar el caso base sin tocar SQL.</p><button id="btn-mostrar-nueva-mision" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-2 hover:bg-primary hover:text-on-primary whitespace-nowrap">+ Nueva misión</button></div>
+<form id="form-nueva-mision" hidden class="grid sm:grid-cols-3 gap-3 mb-6 border border-audit-border bg-surface-container-low p-4 rounded">
+<label class="block sm:col-span-1"><span class="font-label-sm text-on-surface-variant uppercase">Slug (único)</span><input id="mision-nueva-slug" type="text" placeholder="cafe-verde-2" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data text-sm"></label>
+<label class="block sm:col-span-1"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="mision-nueva-titulo" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface text-sm"></label>
+<label class="block sm:col-span-1"><span class="font-label-sm text-on-surface-variant uppercase">Veredicto</span><input id="mision-nueva-veredicto" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface text-sm"></label>
+<div class="sm:col-span-3 flex gap-2"><button id="btn-crear-mision" type="submit" class="font-evidence-data text-xs uppercase border border-primary bg-primary text-on-primary px-4 py-2 hover:opacity-90">Crear</button><button id="btn-cancelar-nueva-mision" type="button" class="font-evidence-data text-xs uppercase border border-audit-border text-on-surface-variant px-4 py-2 hover:border-primary hover:text-primary">Cancelar</button></div>
+</form>
+<div id="lista-misiones" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+</div>
+
+<!-- Vista 2 — Salas de la misión -->
+<div id="contenido-vista-mision" hidden>
+<button id="btn-volver-biblioteca" type="button" class="font-evidence-data text-xs uppercase text-on-surface-variant hover:text-primary mb-4 flex items-center gap-1"><span class="material-symbols-outlined text-sm" aria-hidden="true">arrow_back</span>Biblioteca</button>
+<div class="grid gap-4 sm:grid-cols-2 mb-6 border border-audit-border bg-surface-container-low p-4 rounded">
+<label class="block sm:col-span-2"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="mision-titulo" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Subtítulo</span><input id="mision-subtitulo" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Estado</span><p id="mision-estado-badge" class="mt-1 font-evidence-data text-primary uppercase"></p></label>
+<label class="block sm:col-span-2"><span class="font-label-sm text-on-surface-variant uppercase">Intro</span><textarea id="mision-intro" rows="3" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></textarea></label>
+<label class="block sm:col-span-2"><span class="font-label-sm text-on-surface-variant uppercase">Veredicto</span><textarea id="mision-veredicto" rows="3" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></textarea></label>
+<div class="sm:col-span-2 flex flex-wrap items-end gap-4">
+<label class="flex items-center gap-2"><input id="mision-codigo-auto" type="checkbox" checked><span class="font-label-sm text-on-surface-variant uppercase">Componer código maestro automáticamente</span></label>
+<label class="block flex-1 min-w-[160px]"><span class="font-label-sm text-on-surface-variant uppercase">Código maestro (override manual)</span><input id="mision-codigo-maestro" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data" placeholder="dejar vacío = automático"></label>
+<p class="font-evidence-data text-sm text-on-surface-variant">Código que va a pedir el juego hoy: <span id="mision-codigo-efectivo" class="text-primary"></span></p>
+</div>
+<div class="sm:col-span-2 flex flex-wrap gap-2 pt-2 border-t border-audit-border">
+<button id="btn-guardar-mision" type="button" class="font-evidence-data text-xs uppercase border border-primary bg-primary text-on-primary px-4 py-2 hover:opacity-90">Guardar misión</button>
+<button id="btn-publicar-mision" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary">Publicar</button>
+<button id="btn-duplicar-mision" type="button" class="font-evidence-data text-xs uppercase border border-audit-border text-on-surface-variant px-4 py-2 hover:border-primary hover:text-primary">Duplicar</button>
+<button id="btn-borrar-mision" type="button" class="font-evidence-data text-xs uppercase border border-error text-error px-4 py-2 hover:bg-error hover:text-on-error ml-auto">Borrar misión</button>
+</div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
+<div>
+<div class="flex items-center justify-between mb-2"><span class="font-label-sm text-on-surface-variant uppercase">Salas</span><button id="btn-agregar-sala" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-2 py-1 hover:bg-primary hover:text-on-primary">+ sala</button></div>
+<ul id="lista-salas-mision" role="list" aria-label="Salas de la misión" class="space-y-1"></ul>
+</div>
+
+<div id="form-sala" hidden class="space-y-6">
 <div class="grid sm:grid-cols-2 gap-4">
-<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="input-titulo-sala" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
-<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Pilar</span><input id="input-pilar-sala" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="sala-titulo" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Pilar</span><input id="sala-pilar" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
 </div>
-<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Narrativa <span class="normal-case opacity-70">— usá &lt;b&gt;texto&lt;/b&gt; para negrita</span></span><textarea id="input-narrativa-sala" rows="6" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-body-md"></textarea></label>
-<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Reto</span><textarea id="input-reto-sala" rows="3" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-body-md"></textarea></label>
-<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Mensaje de acierto (feedback_ok)</span><textarea id="input-feedback-ok-sala" rows="4" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data"></textarea></label>
+<div class="grid sm:grid-cols-2 gap-4">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Ícono <span class="normal-case opacity-60">— Material Symbols</span></span><input id="sala-icono" type="text" list="lista-iconos-sugeridos" placeholder="fact_check" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data"><datalist id="lista-iconos-sugeridos"><option value="fact_check"><option value="water_drop"><option value="payments"><option value="groups"><option value="gavel"></datalist></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Desbloqueo</span><select id="sala-desbloqueo" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"><option value="libre">Libre</option><option value="secuencial">Secuencial</option><option value="tras_todas">Tras todas</option></select></label>
+</div>
+<div class="block"><span class="font-label-sm text-on-surface-variant uppercase">Narrativa</span><div id="sala-narrativa-editor" class="mt-1"></div></div>
+<div class="block"><span class="font-label-sm text-on-surface-variant uppercase">Reto <span class="normal-case opacity-60">— enunciado narrativo, distinto de la pregunta del widget</span></span><div id="sala-reto-editor" class="mt-1"></div></div>
+<div class="block"><span class="font-label-sm text-on-surface-variant uppercase">Mensaje de acierto</span><div id="sala-feedback-ok-editor" class="mt-1"></div></div>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Código del fragmento <span class="normal-case opacity-60">— ej. 06, 87, 2P</span></span><input id="sala-codigo" type="text" placeholder="06" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface font-evidence-data"></label>
 
 <div>
-<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Datos del expediente</span><button id="btn-agregar-dato" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar dato</button></div>
-<div id="editor-datos-lista" class="mt-2 space-y-3"></div>
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Datos del expediente</span><button id="btn-sala-agregar-dato" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar dato</button></div>
+<div id="sala-datos-lista" class="mt-2 space-y-3"></div>
 </div>
 
 <div>
-<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Pistas</span><button id="btn-agregar-pista" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar pista</button></div>
-<div id="editor-pistas-lista" class="mt-2 space-y-2"></div>
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Pistas</span><button id="btn-sala-agregar-pista" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-3 py-1 hover:bg-primary hover:text-on-primary">+ agregar pista</button></div>
+<div id="sala-pistas-lista" class="mt-2 space-y-2"></div>
 </div>
 
 <div class="border border-audit-border bg-surface-container-low p-4">
 <p class="font-label-sm text-on-surface-variant uppercase mb-3">Vista previa — lo que ve el equipo</p>
 <div class="bg-background p-4 rounded">
-<h4 id="prev-titulo" class="font-headline-lg text-headline-lg"></h4>
-<p id="prev-pilar" class="font-label-sm text-label-sm uppercase text-on-surface-variant"></p>
-<div id="prev-narrativa" class="mt-4 font-body-md text-on-surface-variant leading-relaxed"></div>
-<div id="prev-datos" class="mt-6 grid gap-3"></div>
-<div class="mt-6 bg-surface-graphite border border-audit-border p-4"><p id="prev-reto-texto" class="font-evidence-data text-evidence-data"><strong>Reto:</strong></p></div>
+<h4 id="sala-prev-titulo" class="font-headline-lg text-headline-lg"></h4>
+<p id="sala-prev-pilar" class="font-label-sm text-label-sm uppercase text-on-surface-variant"></p>
+<div id="sala-prev-narrativa" class="mt-4 font-body-md text-on-surface-variant leading-relaxed"></div>
+<div id="sala-prev-datos" class="mt-6 grid gap-3"></div>
+<div class="mt-6 bg-surface-graphite border border-audit-border p-4"><p id="sala-prev-reto-texto" class="font-evidence-data text-evidence-data"><strong>Reto:</strong></p></div>
 </div>
 </div>
 
-<button id="btn-guardar-contenido-sala" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary">Guardar cambios</button>
+<div class="border border-primary/60 bg-surface-container-low p-4">
+<p class="font-label-sm text-primary uppercase mb-1">Reto interactivo</p>
+<p id="sala-reto-resumen" class="font-evidence-data text-sm text-on-surface-variant mb-3">Sin definir todavía.</p>
+<button id="btn-ir-constructor-reto" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary">Constructor de reto →</button>
+</div>
+
+<div class="flex flex-wrap gap-2 pt-2 border-t border-audit-border">
+<button id="btn-guardar-sala" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary">Guardar sala</button>
+<button id="btn-borrar-sala" type="button" class="font-evidence-data text-xs uppercase border border-error text-error px-4 py-2 hover:bg-error hover:text-on-error ml-auto">Borrar sala</button>
 </div>
 </div>
+</div>
+</div>
+
+<!-- Vista 3 — Constructor de reto -->
+<div id="contenido-vista-reto" hidden>
+<button id="btn-volver-mision" type="button" class="font-evidence-data text-xs uppercase text-on-surface-variant hover:text-primary mb-4 flex items-center gap-1"><span class="material-symbols-outlined text-sm" aria-hidden="true">arrow_back</span>Sala</button>
+<p class="font-label-sm text-on-surface-variant mb-4">La respuesta correcta se marca en el mismo widget que va a ver el equipo — nunca en un campo aparte. Armá la estructura, actualizá la vista previa y marcá ahí la respuesta.</p>
+
+<div class="grid sm:grid-cols-2 gap-4 mb-4">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Mecanismo</span><select id="reto-mecanismo" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"><option value="opcion_unica">Opción única</option><option value="respuesta_corta">Respuesta corta</option><option value="orden">Orden</option><option value="checklist">Checklist</option><option value="clasificacion">Clasificación</option></select></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Enunciado (pregunta del widget)</span><input id="reto-enunciado" type="text" class="mt-1 w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+</div>
+
+<div id="reto-subform" class="space-y-3 mb-4"></div>
+
+<div class="border border-audit-border bg-surface-container-low p-4 mb-4">
+<label class="flex items-center gap-2 mb-2"><input id="reto-cierre-activo" type="checkbox"><span class="font-label-sm text-on-surface-variant uppercase">Agregar pregunta de cierre</span></label>
+<div id="reto-cierre-subform" hidden class="space-y-2">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Enunciado del cierre</span><input id="reto-cierre-enunciado" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Opciones del cierre</span><button id="btn-reto-cierre-agregar-opcion" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-2 py-1 hover:bg-primary hover:text-on-primary">+ opción</button></div>
+<div id="reto-cierre-opciones-lista" class="space-y-1"></div>
+</div>
+</div>
+
+<div class="flex items-center gap-3 mb-2">
+<button id="btn-reto-actualizar-vista" type="button" class="font-evidence-data text-xs uppercase border border-primary bg-primary text-on-primary px-4 py-2 hover:opacity-90">Actualizar vista previa</button>
+<span class="font-label-sm text-on-surface-variant">Reconstruye el widget desde arriba — si ya habías marcado una respuesta, se pierde y hay que volver a marcarla.</span>
+</div>
+<div id="reto-widget-marcar" class="estacion-interaccion border border-audit-border bg-background p-4 rounded mb-2"></div>
+<div id="reto-widget-extra" class="space-y-2 mb-4"></div>
+
+<div class="border border-audit-border bg-surface-container-low p-4 mb-4">
+<p class="font-label-sm text-on-surface-variant uppercase mb-3">Gráfico (opcional)</p>
+<div class="grid sm:grid-cols-3 gap-3 mb-3">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Tipo</span><select id="visual-tipo" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"><option value="">Sin gráfico</option><option value="pastel">Pastel</option><option value="barras_apiladas">Barras apiladas</option></select></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Título</span><input id="visual-titulo" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Unidad</span><input id="visual-unidad" type="text" placeholder="%" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+</div>
+<div id="visual-campos" hidden class="space-y-3">
+<div class="flex items-center justify-between"><span class="font-label-sm text-on-surface-variant uppercase">Series</span><button id="btn-visual-agregar-serie" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-2 py-1 hover:bg-primary hover:text-on-primary">+ serie</button></div>
+<div id="visual-series-lista" class="space-y-2"></div>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Pie / fuente</span><input id="visual-pie" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<div class="grid sm:grid-cols-3 gap-3">
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Rango mín</span><input id="visual-rango-min" type="number" step="any" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Rango máx</span><input id="visual-rango-max" type="number" step="any" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+<label class="block"><span class="font-label-sm text-on-surface-variant uppercase">Etiqueta del rango</span><input id="visual-rango-etiqueta" type="text" class="mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-3 py-2 text-on-surface"></label>
+</div>
+<button id="btn-visual-actualizar-vista" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary">Actualizar vista previa del gráfico</button>
+<div id="visual-preview" class="mt-2"></div>
+</div>
+</div>
+
+<div id="reto-probar-bloque" hidden class="border border-primary/60 bg-surface-container-low p-4 mb-4">
+<p class="font-label-sm text-primary uppercase mb-3">Probar sala <span class="normal-case opacity-70">— contra la respuesta guardada en el servidor, no escribe en intentos ni progreso</span></p>
+<div id="reto-probar-widget" class="estacion-interaccion border border-audit-border bg-background p-4 rounded mb-2"></div>
+<button id="btn-probar-sala" type="button" class="font-evidence-data text-xs uppercase border border-primary text-primary px-4 py-2 hover:bg-primary hover:text-on-primary">Probar</button>
+<p id="reto-probar-resultado" class="font-evidence-data text-sm mt-2"></p>
+</div>
+
+<button id="btn-guardar-reto" type="button" class="bg-surface-graphite border border-primary text-primary font-evidence-data uppercase px-6 py-3 hover:bg-primary hover:text-on-primary">Guardar reto y volver a la sala</button>
 </div>
 </section>
 

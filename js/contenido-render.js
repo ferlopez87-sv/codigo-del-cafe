@@ -13,25 +13,58 @@ export function humanizarClave(clave) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Reconoce ÚNICAMENTE <b>...</b> en el texto de contenido (CONTRACT §14.4:
-// nunca innerHTML con datos dinámicos) y arma <strong>/texto plano a mano —
-// cualquier otro `<...>` que aparezca en el contenido queda como texto
-// literal, igual que si esta función no existiera. 2026-08-28: antes
+// Reconoce ÚNICAMENTE <b>, <i> y <ul><li> (P5b, plan-motor-misiones.md) en el
+// texto de contenido (CONTRACT §14.4: nunca innerHTML con datos dinámicos) y
+// arma los nodos a mano — cualquier otro `<...>` que aparezca queda como
+// texto literal, igual que si esta función no existiera. 2026-08-28: antes
 // pintarNarrativaEstacion hacía p.textContent = texto directo, así que un
 // <b> ya presente en el contenido (Sala de Hechos) se veía literal
-// ("&lt;b&gt;...") en vez de negrita real.
+// ("&lt;b&gt;...") en vez de negrita real — el nombre quedó de esa época,
+// aunque ahora reconoce los tres formatos, no solo negrita.
+// Anidamiento a propósito limitado a lo que P5b permite editar: <b>/<i> sueltos
+// o dentro de un <li>; ningún <ul> dentro de <b>/<i>, ningún <ul> dentro de <li>.
+function _parsearInline(texto, contenedor) {
+  let resto = String(texto ?? '');
+  const re = /<(b|i)>([\s\S]*?)<\/\1>/;
+  while (resto.length) {
+    const m = re.exec(resto);
+    if (!m) { contenedor.appendChild(document.createTextNode(resto)); break; }
+    if (m.index > 0) contenedor.appendChild(document.createTextNode(resto.slice(0, m.index)));
+    const el = document.createElement(m[1] === 'b' ? 'strong' : 'em');
+    el.textContent = m[2];
+    contenedor.appendChild(el);
+    resto = resto.slice(m.index + m[0].length);
+  }
+}
+
+function _parsearItems(texto, ul) {
+  const re = /<li>([\s\S]*?)<\/li>/g;
+  let m;
+  while ((m = re.exec(texto))) {
+    const li = document.createElement('li');
+    _parsearInline(m[1], li);
+    ul.appendChild(li);
+  }
+}
+
 export function pintarConNegritas(contenedor, texto) {
-  const partes = String(texto || '').split(/<b>(.*?)<\/b>/);
-  partes.forEach((parte, i) => {
-    if (!parte) return;
-    if (i % 2 === 1) {
-      const strong = document.createElement('strong');
-      strong.textContent = parte;
-      contenedor.appendChild(strong);
+  let resto = String(texto ?? '');
+  const re = /<(b|i)>([\s\S]*?)<\/\1>|<ul>([\s\S]*?)<\/ul>/;
+  while (resto.length) {
+    const m = re.exec(resto);
+    if (!m) { contenedor.appendChild(document.createTextNode(resto)); break; }
+    if (m.index > 0) contenedor.appendChild(document.createTextNode(resto.slice(0, m.index)));
+    if (m[3] !== undefined) {
+      const ul = document.createElement('ul');
+      _parsearItems(m[3], ul);
+      contenedor.appendChild(ul);
     } else {
-      contenedor.appendChild(document.createTextNode(parte));
+      const el = document.createElement(m[1] === 'b' ? 'strong' : 'em');
+      el.textContent = m[2];
+      contenedor.appendChild(el);
     }
-  });
+    resto = resto.slice(m.index + m[0].length);
+  }
 }
 
 export function pintarValorDato(contenedorDd, valor) {
@@ -89,19 +122,17 @@ export function pintarNarrativaEstacion(contenedor, texto) {
   contenedor.appendChild(p);
 }
 
-// Conserva el <strong>Reto:</strong> inicial si ya existe en el contenedor
-// (juego.html lo trae de fábrica); si no, lo crea — así sirve igual para un
-// contenedor recién armado en la vista previa del editor.
+// P5b (plan-motor-misiones.md): `reto` ahora puede traer <b>/<i>/<ul><li> como
+// narrativa/pistas/feedback_ok, así que ya no alcanza un textNode plano —
+// pasa por el mismo pintarConNegritas. La etiqueta "Reto:" se reconstruye
+// siempre (en vez de reusar el <strong> de fábrica de juego.html) porque ya
+// no es el único <strong> posible del contenedor.
 export function pintarRetoEstacion(contenedor, texto) {
   if (!contenedor) return;
-  const strongPrevio = contenedor.querySelector('strong');
   while (contenedor.firstChild) contenedor.removeChild(contenedor.firstChild);
-  if (strongPrevio) {
-    contenedor.appendChild(strongPrevio);
-  } else {
-    const s = document.createElement('strong');
-    s.textContent = 'Reto:';
-    contenedor.appendChild(s);
-  }
-  contenedor.appendChild(document.createTextNode(' ' + (texto || '')));
+  const s = document.createElement('strong');
+  s.textContent = 'Reto:';
+  contenedor.appendChild(s);
+  contenedor.appendChild(document.createTextNode(' '));
+  pintarConNegritas(contenedor, texto || '');
 }

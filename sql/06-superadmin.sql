@@ -56,6 +56,14 @@ drop policy if exists estaciones_super_admin on estaciones;
 create policy estaciones_super_admin on estaciones for all to public
   using (es_super_admin()) with check (es_super_admin());
 
+-- misiones: biblioteca de escape rooms (2026-09-22). Misma lógica que
+-- estaciones — sin política propia es deny-all incluso para fglopez. El editor
+-- (srv/rutas/contenido.js) gatea además por correo: defensa en profundidad,
+-- nunca una sola capa para algo que, si falla, rompe el caso de TODOS.
+drop policy if exists misiones_super_admin on misiones;
+create policy misiones_super_admin on misiones for all to public
+  using (es_super_admin()) with check (es_super_admin());
+
 -- intentos / progreso / calificaciones: solo select (igual que docente; se
 -- escriben desde verificar_estacion()/rutas ya existentes, no directo)
 drop policy if exists intentos_super_admin on intentos;
@@ -77,7 +85,7 @@ declare
 begin
   if forzar then
     foreach t in array array['perfiles','sesiones','equipos','integrantes','nomina',
-                              'estaciones','intentos','progreso','calificaciones'] loop
+                              'misiones','estaciones','intentos','progreso','calificaciones'] loop
       execute format('alter table %I force row level security', t);
     end loop;
   end if;

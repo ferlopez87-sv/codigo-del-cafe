@@ -1,7 +1,9 @@
 // js/docente.js — Panel docente (te-panel / te-equipos / te-export)
 // Vanilla type:module, usa Docente/Auth de api.js, textContent siempre (XSS §14.4)
-import { Auth, Docente } from './api.js';
+import { Auth, Docente, Contenido } from './api.js';
 import { pintarNarrativaEstacion, pintarDatosEstacion, pintarRetoEstacion } from './contenido-render.js';
+import { renderInteraccion, serializarRespuesta } from './render.js';
+import { crearGrafico } from './dataviz.js';
 
 let sesionActivaId = null;
 let sesionActivaEstado = 'borrador';
@@ -15,7 +17,7 @@ let salaEditandoId = null;
 // Copia de trabajo del formulario. `datosLista` (no un objeto plano) para
 // poder reordenar/renombrar claves sin perder el resto mientras se edita —
 // se convierte a objeto recién al pintar la vista previa o al guardar.
-let formContenido = { titulo:'', pilar:'', narrativa:'', reto:'', feedback_ok:'', datosLista:[], pistas:[] };
+let formContenido = { titulo:'', pilar:'', narrativa:'', reto:'', feedback_ok:'', codigo:'', interaccionRaw:'', respuestaRaw:'', datosLista:[], pistas:[] };
 
 function $(id){ return document.getElementById(id); }
 function setText(id, v){ const el=$(id); if(el) el.textContent= v==null?'':String(v); }
@@ -75,14 +77,18 @@ async function initDocente(){
     const etiqueta = $('docente-usuario-actual');
     if(etiqueta && datos?.correo) etiqueta.textContent = (datos.nombre && datos.nombre!==datos.correo) ? `${datos.nombre} · ${datos.correo}` : datos.correo;
   }catch{}
-  // super-admin: mostrar consola si es fglopez
+  // super-admin: mostrar consola y pestaña Contenido (sección propia debajo de Consola)
   try{
     const correo = (datos?.correo||datos?.email||'').toLowerCase();
     if(correo==='fglopez@monicaherrera.edu.sv'){
       const c=$('consola-super-admin'); if(c) c.removeAttribute('hidden');
+      const sc=$('sec-contenido'); if(sc) sc.removeAttribute('hidden');
+      const navC=$('nav-contenido'); if(navC) navC.removeAttribute('hidden');
       cargarConsolaSuperAdmin();
-      cargarContenidoSalas();
-      enlazarEventosContenido();
+      try{ if(typeof cargarContenidoSalas==='function') cargarContenidoSalas(); }catch(e){ console.warn('cargarContenidoSalas stub:', e?.message); }
+      try{ if(typeof enlazarEventosContenido==='function') enlazarEventosContenido(); }catch(e){ console.warn('enlazarEventosContenido stub:', e?.message); }
+      // P5 nuevo — si existe, inicializa las 3 vistas
+      try{ if(typeof initContenidoP5==='function') initContenidoP5(); }catch(e){ console.warn('initContenidoP5:', e?.message); }
     }
   }catch{}
   await cargarSesiones();
@@ -248,26 +254,10 @@ function datosListaAObjeto(lista){
 }
 
 async function cargarContenidoSalas(){
-  const lista = $('lista-salas-contenido');
-  if(!lista) return;
-  limpiarTabla(lista);
-  const {datos, error} = await Docente.estaciones();
-  if(error){
-    const li=document.createElement('li'); li.textContent = error.mensaje||'No se pudo cargar el contenido de las salas.';
-    lista.appendChild(li);
-    return;
-  }
-  estacionesContenido = Array.isArray(datos) ? datos : [];
-  estacionesContenido.forEach((est)=>{
-    const li=document.createElement('li'); li.setAttribute('role','listitem');
-    const btn=document.createElement('button'); btn.type='button';
-    btn.className='w-full text-left px-3 py-2 border border-audit-border rounded transition-colors font-evidence-data text-xs hover:border-primary hover:bg-surface-container-high aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary';
-    btn.textContent = `Sala ${est.id} — ${est.titulo}`;
-    btn.dataset.salaId = est.id;
-    btn.setAttribute('aria-pressed', Number(est.id)===Number(salaEditandoId) ? 'true':'false');
-    btn.addEventListener('click', ()=> seleccionarSalaParaEditar(est.id));
-    li.appendChild(btn); lista.appendChild(li);
-  });
+  // LEGACY STUB — el editor viejo de 5 salas fijas fue borrado en P5.
+  // Se mantiene como no-op para no romper initDocente si algo aún lo llama.
+  // La implementación real es cargarBiblioteca() / initContenidoP5() más abajo.
+  return;
 }
 
 function seleccionarSalaParaEditar(id){
@@ -279,7 +269,10 @@ function seleccionarSalaParaEditar(id){
   });
   formContenido = {
     titulo: est.titulo||'', pilar: est.pilar||'', narrativa: est.narrativa||'', reto: est.reto||'',
-    feedback_ok: est.feedback_ok||'', datosLista: objetoADatosLista(est.datos),
+    feedback_ok: est.feedback_ok||'', codigo: est.codigo||'',
+    interaccionRaw: est.interaccion ? JSON.stringify(est.interaccion, null, 2) : '',
+    respuestaRaw: est.respuesta ? JSON.stringify(est.respuesta, null, 2) : '',
+    datosLista: objetoADatosLista(est.datos),
     pistas: Array.isArray(est.pistas) ? est.pistas.slice() : []
   };
   if($('input-titulo-sala')) $('input-titulo-sala').value = formContenido.titulo;
@@ -287,6 +280,9 @@ function seleccionarSalaParaEditar(id){
   if($('input-narrativa-sala')) $('input-narrativa-sala').value = formContenido.narrativa;
   if($('input-reto-sala')) $('input-reto-sala').value = formContenido.reto;
   if($('input-feedback-ok-sala')) $('input-feedback-ok-sala').value = formContenido.feedback_ok;
+  if($('input-codigo-sala')) $('input-codigo-sala').value = formContenido.codigo;
+  if($('input-interaccion-sala')) $('input-interaccion-sala').value = formContenido.interaccionRaw;
+  if($('input-respuesta-sala')) $('input-respuesta-sala').value = formContenido.respuestaRaw;
   renderizarEditorDatos();
   renderizarEditorPistas();
   actualizarVistaPreviaContenido();
@@ -417,17 +413,28 @@ function actualizarVistaPreviaContenido(){
 
 async function guardarContenidoSala(){
   if(!salaEditandoId){ mostrarMensajeDocente('Elegí una sala para editar.'); return; }
+  const interaccionRaw = ($('input-interaccion-sala')?.value||'').trim();
+  const respuestaRaw = ($('input-respuesta-sala')?.value||'').trim();
+  const codigoRaw = ($('input-codigo-sala')?.value||'').trim();
+  let interaccion, respuesta;
+  if(interaccionRaw){
+    try{ interaccion = JSON.parse(interaccionRaw); } catch{ mostrarMensajeDocente('Interacción: JSON inválido. Revisá comas, comillas y llaves.'); return; }
+  }
+  if(respuestaRaw){
+    try{ respuesta = JSON.parse(respuestaRaw); } catch{ mostrarMensajeDocente('Respuesta: JSON inválido.'); return; }
+  }
   const payload = {
     titulo: ($('input-titulo-sala')?.value||'').trim(),
     pilar: ($('input-pilar-sala')?.value||'').trim(),
     narrativa: $('input-narrativa-sala')?.value||'',
     reto: $('input-reto-sala')?.value||'',
     feedback_ok: $('input-feedback-ok-sala')?.value||'',
-    // pistas en blanco se descartan acá (no cuentan como "una pista" real);
-    // el servidor de todos modos rechaza cualquier string vacío que llegara.
     pistas: formContenido.pistas.map((p)=>String(p||'').trim()).filter((p)=>p.length>0),
     datos: datosListaAObjeto(formContenido.datosLista)
   };
+  if(interaccion!==undefined) payload.interaccion = interaccion;
+  if(codigoRaw) payload.codigo = codigoRaw;
+  if(respuesta!==undefined) payload.respuesta = respuesta;
   if(!payload.titulo || !payload.pilar || !payload.narrativa.trim() || !payload.reto.trim() || !payload.feedback_ok.trim()){
     mostrarMensajeDocente('Título, pilar, narrativa, reto y mensaje de acierto no pueden quedar vacíos.');
     return;
@@ -438,33 +445,1194 @@ async function guardarContenidoSala(){
   }
   if(!confirm(`¿Guardar cambios en "Sala ${salaEditandoId}"? Esto cambia lo que ven TODOS los equipos de todos los docentes, no solo los tuyos.`)) return;
   const {error} = await Docente.actualizarEstacion(salaEditandoId, payload);
-  if(error){ mostrarMensajeDocente(error.mensaje||'No se pudo guardar el contenido.'); return; }
+  if(error){ mostrarMensajeDocente(error.mensaje||`No se pudo guardar: ${error.campo||''}`); return; }
   const idGuardado = salaEditandoId;
-  await cargarContenidoSalas(); // recarga desde el servidor: el form refleja lo que realmente quedó guardado
+  await cargarContenidoSalas();
   seleccionarSalaParaEditar(idGuardado);
   mostrarMensajeDocente(`Contenido de "Sala ${idGuardado}" guardado.`, 'ok');
 }
 
 function enlazarEventosContenido(){
-  $('input-titulo-sala')?.addEventListener('input', (e)=>{ formContenido.titulo=e.target.value; actualizarVistaPreviaContenido(); });
-  $('input-pilar-sala')?.addEventListener('input', (e)=>{ formContenido.pilar=e.target.value; actualizarVistaPreviaContenido(); });
-  $('input-narrativa-sala')?.addEventListener('input', (e)=>{ formContenido.narrativa=e.target.value; actualizarVistaPreviaContenido(); });
-  $('input-reto-sala')?.addEventListener('input', (e)=>{ formContenido.reto=e.target.value; actualizarVistaPreviaContenido(); });
-  $('input-feedback-ok-sala')?.addEventListener('input', (e)=>{ formContenido.feedback_ok=e.target.value; });
-  $('btn-agregar-dato')?.addEventListener('click', ()=>{
-    formContenido.datosLista.push({ clave:'', tipo:'texto', valor:'' });
-    renderizarEditorDatos();
-  });
-  $('btn-agregar-pista')?.addEventListener('click', ()=>{
-    formContenido.pistas.push('');
-    renderizarEditorPistas();
-  });
-  $('btn-guardar-contenido-sala')?.addEventListener('click', guardarContenidoSala);
+  // LEGACY STUB — ver cargarContenidoSalas() arriba.
+  return;
 }
 
+// ===========================================================================
+// P5 — Editor de misiones (plan-motor-misiones.md P5 + P5b)
+// Dueño: Frontend (*.html + js/**). Todo dentro de #sec-contenido, 3 vistas.
+// ===========================================================================
+
+let misionesP5 = [];
+let misionActivaP5 = null; // objeto mision completo
+let salasP5 = []; // estaciones de la mision activa
+let salaActivaP5 = null; // estacion completa seleccionada
+let vistaP5 = 'biblioteca'; // biblioteca | mision | reto
+
+// WYSIWYG acotado — instancias por campo
+let wysNarrativa = null, wysReto = null, wysFeedback = null;
+let wysPistas = []; // por indice
+
+function mostrarMensajeContenido(texto, tipo){
+  const el = $('contenido-mensaje');
+  if(!el) return;
+  el.textContent = texto;
+  el.classList.toggle('border-primary', tipo==='ok');
+  el.classList.toggle('text-primary', tipo==='ok');
+  el.classList.toggle('bg-primary/10', tipo==='ok');
+  el.classList.toggle('border-error', tipo!=='ok');
+  el.classList.toggle('text-error', tipo!=='ok');
+  el.classList.toggle('bg-error/10', tipo!=='ok');
+  el.removeAttribute('hidden');
+  setTimeout(()=> el.setAttribute('hidden',''), 8000);
+}
+
+function setVistaP5(nombre){
+  vistaP5 = nombre;
+  $('contenido-vista-biblioteca')?.setAttribute('hidden','');
+  $('contenido-vista-mision')?.setAttribute('hidden','');
+  $('contenido-vista-reto')?.setAttribute('hidden','');
+  if(nombre==='biblioteca') $('contenido-vista-biblioteca')?.removeAttribute('hidden');
+  if(nombre==='mision') $('contenido-vista-mision')?.removeAttribute('hidden');
+  if(nombre==='reto') $('contenido-vista-reto')?.removeAttribute('hidden');
+}
+
+// ---------- WYSIWYG acotado P5b ----------
+function slugifyId(texto){
+  return String(texto||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,24) || ('id_'+Math.random().toString(36).slice(2,6));
+}
+function sanitizarHtmlAcotado(html){
+  // Solo <b>, <i>, <ul>, <li> sin atributos. Todo lo demás se descarta
+  // conservando su texto. Devuelve un DocumentFragment — NUNCA un string.
+  //
+  // Versión anterior serializaba el árbol ya limpio a texto (concatenando
+  // `ch.textContent` crudo dentro de template strings) y ese string se
+  // volvía a asignar con `editable.innerHTML=`. Si el texto original traía
+  // entidades HTML (`&lt;img src=x onerror=...&gt;` dentro de un `<b>`
+  // permitido), el walk() de abajo las deja pasar tal cual porque son texto
+  // legítimo — pero al reserializar quedaban decodificadas como caracteres
+  // `<`/`>` literales dentro del string de salida, y ese string, reasignado
+  // por innerHTML, se volvía a parsear como HTML real una segunda vez:
+  // mutation XSS. Confirmado en Chrome real contra Docker — abrir el editor
+  // con ese contenido ejecutaba el `onerror` del `<img>` reconstituido.
+  // El árbol de `tpl.content` después de walk() ya es la versión limpia;
+  // se entrega tal cual (los que lo consumen usan `replaceChildren()`), sin
+  // pasar nunca más por texto.
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html||'');
+  const permitidos = new Set(['B','I','UL','LI']);
+  function walk(nodo){
+    const hijos = Array.from(nodo.childNodes);
+    hijos.forEach(h=>{
+      if(h.nodeType===1){
+        if(!permitidos.has(h.tagName)){
+          // Reemplazar por su texto + hijos sanitizados
+          const frag = document.createDocumentFragment();
+          Array.from(h.childNodes).forEach(ch=> frag.appendChild(ch));
+          // Recursivo sobre frag antes de insertar
+          Array.from(frag.childNodes).forEach(ch=> { if(ch.nodeType===1) walk(ch); });
+          h.replaceWith(frag);
+        } else {
+          // Limpiar atributos
+          while(h.attributes.length) h.removeAttribute(h.attributes[0].name);
+          walk(h);
+        }
+      } else if(h.nodeType===8){ h.remove(); }
+    });
+  }
+  walk(tpl.content);
+  return tpl.content;
+}
+function crearEditorEnriquecido(contId, valorInicial){
+  const cont = $(contId);
+  if(!cont) return { getValue:()=> '', setValue:()=>{} };
+  cont.textContent='';
+  const toolbar = document.createElement('div');
+  toolbar.className='flex gap-1 mb-1';
+  [
+    {cmd:'bold', label:'B', title:'Negrita'},
+    {cmd:'italic', label:'I', title:'Cursiva'},
+    {cmd:'insertUnorderedList', label:'• Lista', title:'Lista con viñetas'},
+  ].forEach(b=>{
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.textContent=b.label;
+    btn.title=b.title;
+    btn.className='px-2 py-1 border border-audit-border text-xs hover:border-primary hover:text-primary';
+    btn.addEventListener('click', ()=>{
+      editable.focus();
+      document.execCommand(b.cmd, false, null);
+      editable.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+    toolbar.appendChild(btn);
+  });
+  const editable=document.createElement('div');
+  editable.contentEditable='true';
+  editable.className='min-h-[80px] w-full bg-surface-container-low border border-audit-border rounded px-3 py-2 text-on-surface text-sm focus:border-primary outline-none';
+  editable.setAttribute('role','textbox');
+  editable.setAttribute('aria-multiline','true');
+  // Inicializar con html acotado — sanitizarHtmlAcotado ya devuelve el árbol
+  // limpio como fragmento, sirve igual para texto plano o con los tags
+  // permitidos, no hace falta distinguir casos a mano.
+  editable.replaceChildren(sanitizarHtmlAcotado(valorInicial||''));
+  editable.addEventListener('paste', (e)=>{
+    e.preventDefault();
+    const text = (e.clipboardData||window.clipboardData).getData('text/html') || (e.clipboardData||window.clipboardData).getData('text/plain');
+    const frag = sanitizarHtmlAcotado(text);
+    const sel = window.getSelection();
+    if(sel && sel.rangeCount){
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const ultimoNodo = frag.lastChild;
+      range.insertNode(frag);
+      if(ultimoNodo){
+        range.setStartAfter(ultimoNodo);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    editable.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+  // Actualizar vista previa en vivo al editar
+  editable.addEventListener('input', ()=> {
+    try{ actualizarVistaPreviaSalaP5(); }catch{}
+  });
+  editable.addEventListener('keyup', ()=> {
+    try{ actualizarVistaPreviaSalaP5(); }catch{}
+  });
+  cont.appendChild(toolbar);
+  cont.appendChild(editable);
+  return {
+    getValue(){
+      // Recorrer DOM del editable y serializar a <b>/<i>/<ul><li>
+      let out='';
+      editable.childNodes.forEach(n=>{
+        if(n.nodeType===3) out += n.textContent;
+        else if(n.nodeType===1){
+          if(n.tagName==='DIV' || n.tagName==='P'){
+            // Bloques creados por execCommand — serializar hijos + salto
+            n.childNodes.forEach(ch=>{
+              if(ch.nodeType===3) out += ch.textContent;
+              else if(ch.tagName==='B' || ch.tagName==='STRONG') out += `<b>${ch.textContent}</b>`;
+              else if(ch.tagName==='I' || ch.tagName==='EM') out += `<i>${ch.textContent}</i>`;
+              else if(ch.tagName==='UL'){
+                out += '<ul>';
+                ch.childNodes.forEach(li=>{
+                  if(li.tagName==='LI'){
+                    let liInner='';
+                    li.childNodes.forEach(c2=>{
+                      if(c2.nodeType===3) liInner+=c2.textContent;
+                      else if(c2.tagName==='B'||c2.tagName==='STRONG') liInner+=`<b>${c2.textContent}</b>`;
+                      else if(c2.tagName==='I'||c2.tagName==='EM') liInner+=`<i>${c2.textContent}</i>`;
+                      else liInner+=c2.textContent||'';
+                    });
+                    out += `<li>${liInner}</li>`;
+                  }
+                });
+                out+='</ul>';
+              } else out+= ch.textContent||'';
+            });
+            out+='\n';
+          } else if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${n.textContent}</b>`;
+          else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${n.textContent}</i>`;
+          else if(n.tagName==='UL'){
+            out+='<ul>';
+            n.childNodes.forEach(li=>{
+              if(li.tagName==='LI'){
+                let liInner='';
+                li.childNodes.forEach(c2=>{
+                  if(c2.nodeType===3) liInner+=c2.textContent;
+                  else if(c2.tagName==='B'||c2.tagName==='STRONG') liInner+=`<b>${c2.textContent}</b>`;
+                  else if(c2.tagName==='I'||c2.tagName==='EM') liInner+=`<i>${c2.textContent}</i>`;
+                  else liInner+=c2.textContent||'';
+                });
+                out+=`<li>${liInner}</li>`;
+              }
+            });
+            out+='</ul>';
+          } else if(n.tagName==='BR') out+='\n';
+          else out+= n.textContent||'';
+        }
+      });
+      return out.trim();
+    },
+    setValue(v){
+      editable.replaceChildren(sanitizarHtmlAcotado(v||''));
+    },
+    editable
+  };
+}
+
+// ---------- INIT P5 ----------
+async function initContenidoP5(){
+  // Poblar selector de misión en #sec-sesiones (solo fglopez)
+  try{
+    const sel=$('sesion-mision');
+    const campo=$('sesion-mision-campo');
+    if(sel && campo){
+      const {datos, error} = await Contenido.misiones();
+      if(!error && Array.isArray(datos)){
+        sel.textContent='';
+        const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='— Auto (una sola publicada) —';
+        sel.appendChild(opt0);
+        datos.forEach(m=>{
+          const o=document.createElement('option'); o.value=m.id; o.textContent=`${m.titulo} · ${m.estado} · ${m.salas} salas`;
+          sel.appendChild(o);
+        });
+        campo.removeAttribute('hidden');
+        sel.addEventListener('change', ()=>{});
+      }
+    }
+  }catch{}
+  await cargarBiblioteca();
+  enlazarEventosP5();
+}
+
+async function cargarBiblioteca(){
+  const cont=$('lista-misiones');
+  if(!cont) return;
+  cont.textContent='Cargando…';
+  const {datos, error} = await Contenido.misiones();
+  if(error){ cont.textContent = error.mensaje||'No se pudo cargar.'; return; }
+  misionesP5 = Array.isArray(datos)? datos: [];
+  renderBiblioteca();
+}
+function renderBiblioteca(){
+  const cont=$('lista-misiones');
+  if(!cont) return;
+  cont.textContent='';
+  if(misionesP5.length===0){
+    const p=document.createElement('p'); p.className='font-evidence-data text-sm text-on-surface-variant'; p.textContent='Sin misiones. Creá la primera.';
+    cont.appendChild(p); return;
+  }
+  misionesP5.forEach(m=>{
+    const card=document.createElement('div');
+    card.className='border border-audit-border bg-surface-container-low p-4 rounded space-y-2';
+    const h=document.createElement('h3'); h.className='font-evidence-data font-bold text-sm'; h.textContent=m.titulo;
+    const meta=document.createElement('p'); meta.className='font-label-sm text-xs text-on-surface-variant'; meta.textContent=`${m.slug} · ${m.estado} · ${m.salas} salas · ${m.codigo_maestro_efectivo||'—'}`;
+    const intro=document.createElement('p'); intro.className='font-body-md text-xs text-on-surface-variant line-clamp-2'; intro.textContent=m.intro||m.subtitulo||'';
+    const actions=document.createElement('div'); actions.className='flex flex-wrap gap-2 pt-2';
+    const btnEditar=document.createElement('button'); btnEditar.type='button'; btnEditar.textContent='Editar';
+    btnEditar.className='px-3 py-1 border border-primary text-primary text-xs uppercase hover:bg-primary hover:text-on-primary';
+    btnEditar.addEventListener('click', ()=> abrirMision(m.id));
+    const btnDuplicar=document.createElement('button'); btnDuplicar.type='button'; btnDuplicar.textContent='Duplicar';
+    btnDuplicar.className='px-3 py-1 border border-audit-border text-on-surface-variant text-xs uppercase hover:border-primary hover:text-primary';
+    btnDuplicar.addEventListener('click', ()=> duplicarMision(m.id));
+    const btnPublicar=document.createElement('button'); btnPublicar.type='button'; btnPublicar.textContent='Publicar';
+    btnPublicar.className='px-3 py-1 border border-audit-border text-on-surface-variant text-xs uppercase hover:border-primary hover:text-primary';
+    if(m.estado==='publicada'){ btnPublicar.disabled=true; btnPublicar.classList.add('opacity-40'); }
+    btnPublicar.addEventListener('click', ()=> publicarMision(m.id));
+    const btnBorrar=document.createElement('button'); btnBorrar.type='button'; btnBorrar.textContent='Borrar';
+    btnBorrar.className='px-3 py-1 border border-error text-error text-xs uppercase hover:bg-error hover:text-on-error ml-auto';
+    btnBorrar.addEventListener('click', ()=> borrarMision(m.id, m.titulo));
+    actions.append(btnEditar, btnDuplicar, btnPublicar, btnBorrar);
+    card.append(h, meta, intro, actions);
+    cont.appendChild(card);
+  });
+}
+async function crearMision(e){
+  if(e) e.preventDefault();
+  const slug=$('mision-nueva-slug')?.value.trim();
+  const titulo=$('mision-nueva-titulo')?.value.trim();
+  const veredicto=$('mision-nueva-veredicto')?.value.trim();
+  if(!slug||!titulo||!veredicto){ mostrarMensajeContenido('Slug, título y veredicto son obligatorios.'); return; }
+  const {datos, error} = await Contenido.crearMision({slug, titulo, veredicto});
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo crear.'); return; }
+  mostrarMensajeContenido(`Misión "${titulo}" creada.`, 'ok');
+  $('form-nueva-mision')?.setAttribute('hidden','');
+  await cargarBiblioteca();
+  if(datos?.id) abrirMision(datos.id);
+}
+async function duplicarMision(id){
+  if(!confirm('¿Duplicar esta misión?')) return;
+  const {datos, error} = await Contenido.duplicarMision(id);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo duplicar.'); return; }
+  mostrarMensajeContenido('Misión duplicada.', 'ok');
+  await cargarBiblioteca();
+}
+async function publicarMision(id){
+  const {error} = await Contenido.publicarMision(id);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo publicar.'); return; }
+  mostrarMensajeContenido('Misión publicada.', 'ok');
+  await cargarBiblioteca();
+  if(misionActivaP5?.id===id) await abrirMision(id);
+}
+async function borrarMision(id, titulo){
+  if(!confirm(`¿Borrar "${titulo||id}" para siempre? Se pierden sus salas. Esto NO se puede deshacer.`)) return;
+  const {error} = await Contenido.borrarMision(id);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo borrar. Si está en uso por alguna sesión, primero borrá esas sesiones.'); return; }
+  mostrarMensajeContenido('Misión borrada.', 'ok');
+  if(misionActivaP5?.id===id){ misionActivaP5=null; salasP5=[]; setVistaP5('biblioteca'); }
+  await cargarBiblioteca();
+}
+async function abrirMision(id){
+  const {datos: misiones} = await Contenido.misiones();
+  const m = (misiones||[]).find(x=> String(x.id)===String(id));
+  if(!m){ mostrarMensajeContenido('No se encontró la misión.'); return; }
+  misionActivaP5 = m;
+  setVistaP5('mision');
+  $('mision-titulo').value = m.titulo||'';
+  $('mision-subtitulo').value = m.subtitulo||'';
+  $('mision-intro').value = m.intro||'';
+  $('mision-veredicto').value = m.veredicto||'';
+  $('mision-estado-badge').textContent = m.estado||'';
+  const autoChk=$('mision-codigo-auto');
+  const codInput=$('mision-codigo-maestro');
+  const efectivo=$('mision-codigo-efectivo');
+  const esAuto = !m.codigo_maestro;
+  if(autoChk) autoChk.checked = esAuto;
+  if(codInput){ codInput.value = m.codigo_maestro||''; codInput.disabled = esAuto; }
+  if(efectivo) efectivo.textContent = m.codigo_maestro_efectivo||'—';
+  await cargarSalasMision(id);
+  // Inicializar editores WYSIWYG vacíos — se llenan al seleccionar sala
+  // (no hace falta acá, son de la sala no de la misión)
+}
+async function cargarSalasMision(misionId){
+  const {datos, error} = await Contenido.estaciones(misionId);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudieron cargar las salas.'); return; }
+  salasP5 = Array.isArray(datos)? datos.slice().sort((a,b)=> (a.orden||0)-(b.orden||0)) : [];
+  renderListaSalas();
+  if(salasP5.length) seleccionarSalaP5(salasP5[0].id);
+  else {
+    salaActivaP5=null;
+    $('form-sala')?.setAttribute('hidden','');
+  }
+}
+function renderListaSalas(){
+  const ul=$('lista-salas-mision');
+  if(!ul) return;
+  ul.textContent='';
+  salasP5.forEach((s, idx)=>{
+    const li=document.createElement('li');
+    li.className='flex items-center gap-1';
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='flex-1 text-left px-3 py-2 border border-audit-border rounded text-xs font-evidence-data hover:border-primary hover:bg-surface-container-high '+ (String(s.id)===String(salaActivaP5?.id)?'border-primary bg-primary/10 text-primary':'');
+    btn.textContent=`${s.orden}. ${s.titulo} · ${s.desbloqueo}`;
+    btn.addEventListener('click', ()=> seleccionarSalaP5(s.id));
+    const up=document.createElement('button'); up.type='button'; up.textContent='↑'; up.title='Subir';
+    up.className='px-2 py-1 border border-audit-border text-xs hover:border-primary disabled:opacity-30';
+    up.disabled = idx===0;
+    up.addEventListener('click', ()=> moverSala(s.id, -1));
+    const down=document.createElement('button'); down.type='button'; down.textContent='↓'; down.title='Bajar';
+    down.className='px-2 py-1 border border-audit-border text-xs hover:border-primary disabled:opacity-30';
+    down.disabled = idx===salasP5.length-1;
+    down.addEventListener('click', ()=> moverSala(s.id, 1));
+    li.append(btn, up, down);
+    ul.appendChild(li);
+  });
+}
+async function moverSala(id, dir){
+  const idx = salasP5.findIndex(s=> String(s.id)===String(id));
+  if(idx<0) return;
+  const nuevoIdx = idx+dir;
+  if(nuevoIdx<0 || nuevoIdx>=salasP5.length) return;
+  const ordenIds = salasP5.map(s=> s.id);
+  const tmp = ordenIds[idx]; ordenIds[idx]=ordenIds[nuevoIdx]; ordenIds[nuevoIdx]=tmp;
+  const {datos, error} = await Contenido.reordenarEstaciones(misionActivaP5.id, ordenIds);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo reordenar.'); return; }
+  salasP5 = Array.isArray(datos)? datos.slice().sort((a,b)=> (a.orden||0)-(b.orden||0)) : salasP5;
+  renderListaSalas();
+  // Refrescar biblioteca para codigo maestro efectivo
+  await cargarBiblioteca();
+  const mActualizado = misionesP5.find(m=> String(m.id)===String(misionActivaP5.id));
+  if(mActualizado){ misionActivaP5=mActualizado; const fe=$('mision-codigo-efectivo'); if(fe) fe.textContent=mActualizado.codigo_maestro_efectivo||'—'; }
+}
+function seleccionarSalaP5(id){
+  const s = salasP5.find(x=> String(x.id)===String(id));
+  if(!s) return;
+  salaActivaP5 = s;
+  renderListaSalas();
+  const form=$('form-sala');
+  if(form) form.removeAttribute('hidden');
+  $('sala-titulo').value = s.titulo||'';
+  $('sala-pilar').value = s.pilar||'';
+  $('sala-icono').value = s.icono||'';
+  $('sala-desbloqueo').value = s.desbloqueo||'libre';
+  $('sala-codigo').value = s.codigo||'';
+  // WYSIWYG — recrear editores con valor de la sala
+  wysNarrativa = crearEditorEnriquecido('sala-narrativa-editor', s.narrativa||'');
+  wysReto = crearEditorEnriquecido('sala-reto-editor', s.reto||'');
+  wysFeedback = crearEditorEnriquecido('sala-feedback-ok-editor', s.feedback_ok||'');
+  // Datos y pistas — reusando helpers generalizados
+  renderEditorDatosP5(s.datos);
+  renderEditorPistasP5(s.pistas);
+  // Vista previa fiel
+  actualizarVistaPreviaSalaP5();
+  // Resumen del reto
+  const resumen=$('sala-reto-resumen');
+  if(resumen){
+    const t=s.interaccion?.tipo||'—';
+    const cierre = s.interaccion?.cierre ? ' + cierre' : '';
+    resumen.textContent = `Mecanismo: ${t}${cierre} — editar en Constructor de reto →`;
+  }
+}
+let datosListaP5 = [];
+let pistasListaP5 = [];
+function renderEditorDatosP5(datosObj){
+  datosListaP5 = objetoADatosLista(datosObj||{});
+  const cont=$('sala-datos-lista');
+  if(!cont) return;
+  cont.textContent='';
+  datosListaP5.forEach((fila, idx)=> cont.appendChild(construirFilaDatoP5(fila, idx)));
+}
+function construirFilaDatoP5(fila, idx){
+  const wrap=document.createElement('div'); wrap.className='fila-dato space-y-2';
+  const cab=document.createElement('div'); cab.className='flex flex-wrap items-center gap-2';
+  const inpClave=document.createElement('input'); inpClave.type='text'; inpClave.value=fila.clave; inpClave.placeholder='nombre_del_dato';
+  inpClave.className='flex-1 min-w-[160px] bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+  inpClave.addEventListener('input', ()=>{ fila.clave=inpClave.value; actualizarVistaPreviaSalaP5(); });
+  const selTipo=document.createElement('select'); selTipo.className='bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+  [['texto','Texto'],['lista','Lista'],['objeto','Objeto']].forEach(([v,t])=>{
+    const o=document.createElement('option'); o.value=v; o.textContent=t; if(fila.tipo===v) o.selected=true; selTipo.appendChild(o);
+  });
+  selTipo.addEventListener('change', ()=>{
+    fila.tipo=selTipo.value;
+    if(fila.tipo==='texto' && fila.valor==null) fila.valor='';
+    if(fila.tipo==='lista' && !fila.items) fila.items=[];
+    if(fila.tipo==='objeto' && !fila.pares) fila.pares=[];
+    renderEditorDatosP5(datosListaAObjeto(datosListaP5));
+    // Reconstruir desde objeto para no perder estado intermedio
+    datosListaP5 = objetoADatosLista(datosListaAObjeto(datosListaP5));
+    const cont=$('sala-datos-lista'); if(cont){ cont.textContent=''; datosListaP5.forEach((f,i)=> cont.appendChild(construirFilaDatoP5(f,i))); }
+    actualizarVistaPreviaSalaP5();
+  });
+  const btnQ=document.createElement('button'); btnQ.type='button'; btnQ.textContent='Quitar';
+  btnQ.className='text-xs border border-error text-error px-2 py-1 hover:bg-error hover:text-on-error';
+  btnQ.addEventListener('click', ()=>{ datosListaP5.splice(idx,1); renderEditorDatosP5(datosListaAObjeto(datosListaP5)); actualizarVistaPreviaSalaP5(); });
+  cab.append(inpClave, selTipo, btnQ);
+  wrap.appendChild(cab);
+  wrap.appendChild(construirSubEditorDatoP5(fila));
+  return wrap;
+}
+function construirSubEditorDatoP5(fila){
+  if(fila.tipo==='lista'){
+    const cont=document.createElement('div'); cont.className='space-y-1 pl-2';
+    (fila.items||[]).forEach((item,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=item;
+      inp.className='flex-1 bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+      inp.addEventListener('input', ()=>{ fila.items[i]=inp.value; actualizarVistaPreviaSalaP5(); });
+      const q=document.createElement('button'); q.type='button'; q.textContent='×'; q.className='px-2 border border-error text-error hover:bg-error hover:text-on-error';
+      q.addEventListener('click', ()=>{ fila.items.splice(i,1); renderEditorDatosP5(datosListaAObjeto(datosListaP5)); actualizarVistaPreviaSalaP5(); });
+      row.append(inp,q); cont.appendChild(row);
+    });
+    const add=document.createElement('button'); add.type='button'; add.textContent='+ línea'; add.className='text-xs text-primary hover:underline';
+    add.addEventListener('click', ()=>{ fila.items.push(''); renderEditorDatosP5(datosListaAObjeto(datosListaP5)); actualizarVistaPreviaSalaP5(); });
+    cont.appendChild(add); return cont;
+  }
+  if(fila.tipo==='objeto'){
+    const cont=document.createElement('div'); cont.className='space-y-1 pl-2';
+    (fila.pares||[]).forEach((par,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2';
+      const k=document.createElement('input'); k.type='text'; k.value=par.clave; k.placeholder='clave';
+      k.className='w-1/3 bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+      k.addEventListener('input', ()=>{ par.clave=k.value; actualizarVistaPreviaSalaP5(); });
+      const v=document.createElement('input'); v.type='text'; v.value=par.valor; v.placeholder='valor';
+      v.className='flex-1 bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+      v.addEventListener('input', ()=>{ par.valor=v.value; actualizarVistaPreviaSalaP5(); });
+      const q=document.createElement('button'); q.type='button'; q.textContent='×'; q.className='px-2 border border-error text-error hover:bg-error hover:text-on-error';
+      q.addEventListener('click', ()=>{ fila.pares.splice(i,1); renderEditorDatosP5(datosListaAObjeto(datosListaP5)); actualizarVistaPreviaSalaP5(); });
+      row.append(k,v,q); cont.appendChild(row);
+    });
+    const add=document.createElement('button'); add.type='button'; add.textContent='+ par'; add.className='text-xs text-primary hover:underline';
+    add.addEventListener('click', ()=>{ fila.pares.push({clave:'',valor:''}); renderEditorDatosP5(datosListaAObjeto(datosListaP5)); actualizarVistaPreviaSalaP5(); });
+    cont.appendChild(add); return cont;
+  }
+  const cont=document.createElement('div'); cont.className='pl-2';
+  const ta=document.createElement('textarea'); ta.rows=2; ta.value=fila.valor||'';
+  ta.className='w-full bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+  ta.addEventListener('input', ()=>{ fila.valor=ta.value; actualizarVistaPreviaSalaP5(); });
+  cont.appendChild(ta); return cont;
+}
+function renderEditorPistasP5(pistas){
+  pistasListaP5 = Array.isArray(pistas)? pistas.slice(): [];
+  // wysPistas se maneja como editores enriquecidos por pista — pero para simplicidad inicial,
+  // si hay editores ya creados, los limpiamos y recreamos
+  const cont=$('sala-pistas-lista');
+  if(!cont) return;
+  cont.textContent='';
+  wysPistas=[];
+  pistasListaP5.forEach((texto,i)=>{
+    const row=document.createElement('div'); row.className='border border-audit-border bg-surface-container-low p-2 space-y-1';
+    const label=document.createElement('div'); label.className='font-label-sm text-xs uppercase text-on-surface-variant'; label.textContent=`Pista ${i+1}`;
+    const edCont=document.createElement('div'); edCont.id=`pista-editor-${i}`;
+    const quitar=document.createElement('button'); quitar.type='button'; quitar.textContent='Quitar';
+    quitar.className='text-xs border border-error text-error px-2 py-1 hover:bg-error hover:text-on-error';
+    quitar.addEventListener('click', ()=>{ pistasListaP5.splice(i,1); renderEditorPistasP5(pistasListaP5); });
+    row.append(label, edCont, quitar);
+    cont.appendChild(row);
+    // Crear editor después de attach al DOM
+    setTimeout(()=>{
+      const ed = crearEditorEnriquecido(`pista-editor-${i}`, texto);
+      wysPistas[i]=ed;
+    },0);
+  });
+  // Fallback síncrono para primera pista (si no hay timeout aún, igual funciona porque el div ya está)
+  // Para pistas vacías, igual hay editores — el get se hace leyendo wysPistas o fallback
+}
+function actualizarVistaPreviaSalaP5(){
+  setText('sala-prev-titulo', $('sala-titulo')?.value || salaActivaP5?.titulo || '');
+  setText('sala-prev-pilar', $('sala-pilar')?.value || '');
+  const narrativaVal = wysNarrativa ? wysNarrativa.getValue() : ($('sala-narrativa-editor')?.textContent||'');
+  const retoVal = wysReto ? wysReto.getValue() : '';
+  pintarNarrativaEstacion($('sala-prev-narrativa'), narrativaVal);
+  const datosEl=$('sala-prev-datos');
+  if(datosEl) pintarDatosEstacion(datosEl, datosListaAObjeto(datosListaP5));
+  pintarRetoEstacion($('sala-prev-reto-texto'), retoVal);
+}
+async function guardarSalaP5(){
+  if(!salaActivaP5){ mostrarMensajeContenido('Elegí una sala.'); return; }
+  const titulo=$('sala-titulo')?.value.trim();
+  const pilar=$('sala-pilar')?.value.trim();
+  const icono=$('sala-icono')?.value.trim();
+  const desbloqueo=$('sala-desbloqueo')?.value;
+  const codigo=$('sala-codigo')?.value.trim();
+  const narrativa = wysNarrativa ? wysNarrativa.getValue() : '';
+  const reto = wysReto ? wysReto.getValue() : '';
+  const feedback_ok = wysFeedback ? wysFeedback.getValue() : '';
+  // Pistas desde wysPistas (si están inicializados) o fallback
+  const pistas = wysPistas.length ? wysPistas.map(ed=> ed? ed.getValue().trim(): '').filter(Boolean)
+    : pistasListaP5.map(p=> String(p||'').trim()).filter(Boolean);
+  // Si algún editor de pista aún no inicializó (timeout), leer fallback
+  if(pistas.length===0 && pistasListaP5.length) {
+    // intentar leer de DOM directo
+    pistasListaP5.forEach((_,i)=>{
+      const ed=wysPistas[i];
+      if(ed) pistas.push(ed.getValue().trim());
+    });
+  }
+  // Si sigue vacío por timing, usar lista cruda
+  const pistasFinal = pistas.length? pistas : pistasListaP5.map(p=> String(p||'').trim()).filter(Boolean);
+  if(!titulo||!pilar||!narrativa.trim()||!reto.trim()||!feedback_ok.trim()){ mostrarMensajeContenido('Título, pilar, narrativa, reto y mensaje de acierto son obligatorios.'); return; }
+  if(!codigo){ mostrarMensajeContenido('Código del fragmento es obligatorio.'); return; }
+  const datos = datosListaAObjeto(datosListaP5);
+  if(Object.keys(datos).length===0){ mostrarMensajeContenido('Agregá al menos un dato del expediente.'); return; }
+  // Interacción/respuesta/visual se guardan desde el Constructor — acá se conservan tal cual
+  const payload = {
+    titulo, pilar, narrativa, reto, datos,
+    pistas: pistasFinal.length? pistasFinal : ['Pista 1','Pista 2','Pista 3'],
+    feedback_ok, codigo, interaccion: salaActivaP5.interaccion, respuesta: salaActivaP5.respuesta,
+    desbloqueo: desbloqueo||'libre', icono: icono||null, visual: salaActivaP5.visual||null
+  };
+  if(!payload.pistas || payload.pistas.length===0) payload.pistas=['Pista 1','Pista 2','Pista 3'];
+  // Validación mínima: si no hay interaccion aún, no se puede guardar — pedir constructor
+  if(!payload.interaccion){ mostrarMensajeContenido('Esta sala aún no tiene reto interactivo. Usá "Constructor de reto" primero.'); return; }
+  if(!confirm(`¿Guardar cambios en "${salaActivaP5.titulo}"?`)) return;
+  const {datos: guardada, error} = await Contenido.actualizarEstacion(salaActivaP5.id, payload);
+  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo guardar: ${error.campo||''}`); return; }
+  mostrarMensajeContenido('Sala guardada.', 'ok');
+  // Refrescar cache
+  const idx = salasP5.findIndex(s=> String(s.id)===String(guardada.id));
+  if(idx>=0) salasP5[idx]=guardada;
+  salaActivaP5=guardada;
+  renderListaSalas();
+  actualizarVistaPreviaSalaP5();
+}
+async function guardarMisionP5(){
+  if(!misionActivaP5){ mostrarMensajeContenido('Ninguna misión seleccionada.'); return; }
+  const titulo=$('mision-titulo')?.value.trim();
+  const subtitulo=$('mision-subtitulo')?.value.trim();
+  const intro=$('mision-intro')?.value.trim();
+  const veredicto=$('mision-veredicto')?.value.trim();
+  const autoChk=$('mision-codigo-auto')?.checked;
+  const codigoRaw=$('mision-codigo-maestro')?.value.trim();
+  if(!titulo||!veredicto){ mostrarMensajeContenido('Título y veredicto son obligatorios.'); return; }
+  const payload={ slug: misionActivaP5.slug, titulo, subtitulo: subtitulo||null, intro: intro||null, veredicto, codigo_maestro: autoChk? null : (codigoRaw||null) };
+  const {datos, error} = await Contenido.actualizarMision(misionActivaP5.id, payload);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo guardar la misión.'); return; }
+  mostrarMensajeContenido('Misión guardada.', 'ok');
+  misionActivaP5=datos;
+  const fe=$('mision-codigo-efectivo'); if(fe) fe.textContent=datos.codigo_maestro_efectivo||'—';
+  await cargarBiblioteca();
+}
+async function agregarSalaP5(){
+  if(!misionActivaP5){ mostrarMensajeContenido('Elegí una misión primero.'); return; }
+  // Crear sala mínima válida con mecanismo por defecto opcion_unica
+  const payload={
+    titulo:'Nueva sala', pilar:'Pilar', narrativa:'Narrativa de la sala.', reto:'¿Cuál es la respuesta correcta?',
+    datos:{ clave:'valor de ejemplo' }, pistas:['Pista 1','Pista 2','Pista 3'], feedback_ok:'¡Correcto! Código: XX',
+    codigo:'XX', interaccion:{ tipo:'opcion_unica', enunciado:'Elegí una opción', opciones:[{id:'a', texto:'Opción A'},{id:'b', texto:'Opción B'}] },
+    respuesta:{ valor:'a' }, desbloqueo:'libre', icono:'help', visual:null
+  };
+  const {datos, error} = await Contenido.crearEstacion(misionActivaP5.id, payload);
+  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo crear la sala: ${error.campo||''}`); return; }
+  mostrarMensajeContenido('Sala creada.', 'ok');
+  await cargarSalasMision(misionActivaP5.id);
+  seleccionarSalaP5(datos.id);
+}
+async function borrarSalaP5(){
+  if(!salaActivaP5){ mostrarMensajeContenido('Ninguna sala seleccionada.'); return; }
+  if(!confirm(`¿Borrar "${salaActivaP5.titulo}" para siempre?`)) return;
+  const {error} = await Contenido.borrarEstacion(salaActivaP5.id);
+  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo borrar.'); return; }
+  mostrarMensajeContenido('Sala borrada.', 'ok');
+  await cargarSalasMision(misionActivaP5.id);
+}
+
+// ---------- Constructor de reto P5 ----------
+let retoState = { tipo:'opcion_unica', enunciado:'', opciones:[], items:[], categorias:[], modo:'texto', placeholder:'', min:null, max:null, paso:null, sufijo:'', cierre:null, visual:null, respuesta:{ valor:null } };
+let retoRespuestaExtra = { min:null, max:null }; // para respuesta_corta modo numero por rango
+
+function initConstructorDesdeSala(){
+  const inter = salaActivaP5?.interaccion||{};
+  const resp = salaActivaP5?.respuesta||{};
+  retoState.tipo = inter.tipo||'opcion_unica';
+  retoState.enunciado = inter.enunciado||'';
+  retoState.modo = inter.modo||'texto';
+  retoState.placeholder = inter.placeholder||'';
+  retoState.min = inter.min??null; retoState.max = inter.max??null; retoState.paso = inter.paso??null; retoState.sufijo = inter.sufijo||'';
+  // Clonar opciones/items/categorias con ids estables
+  retoState.opciones = Array.isArray(inter.opciones)? inter.opciones.map(o=> ({...o})) : [{id:'a', texto:'Opción A'},{id:'b', texto:'Opción B'}];
+  retoState.items = Array.isArray(inter.items)? inter.items.map(it=> ({...it})) : [{id:'item1', texto:'Ítem 1'},{id:'item2', texto:'Ítem 2'}];
+  retoState.categorias = Array.isArray(inter.categorias)? inter.categorias.map(c=> ({...c})) : [{id:'cat1', texto:'Categoría 1'},{id:'cat2', texto:'Categoría 2'}];
+  retoState.barajar = inter.barajar??false;
+  retoState.cierre = inter.cierre ? { enunciado: inter.cierre.enunciado||'', opciones: (inter.cierre.opciones||[]).map(o=> ({...o})) } : null;
+  if(resp.min!==undefined || resp.max!==undefined){
+    retoRespuestaExtra.min = resp.min??null; retoRespuestaExtra.max = resp.max??null;
+    retoState.respuesta = { valor: null, min: resp.min, max: resp.max, cierre: resp.cierre };
+  } else {
+    retoRespuestaExtra.min=null; retoRespuestaExtra.max=null;
+    retoState.respuesta = { valor: resp.valor??null, cierre: resp.cierre };
+  }
+  retoState.visual = salaActivaP5?.visual ? JSON.parse(JSON.stringify(salaActivaP5.visual)) : null;
+  $('reto-mecanismo').value = retoState.tipo;
+  $('reto-enunciado').value = retoState.enunciado;
+  $('reto-cierre-activo').checked = !!retoState.cierre;
+  renderSubformReto();
+  renderCierreSubform();
+  renderVisualForm();
+  actualizarVistaPreviaReto();
+}
+function renderSubformReto(){
+  const cont=$('reto-subform');
+  if(!cont) return;
+  cont.textContent='';
+  const tipo=retoState.tipo;
+  if(tipo==='opcion_unica'){
+    const wrap=document.createElement('div'); wrap.className='space-y-2';
+    const hdr=document.createElement('div'); hdr.className='flex justify-between items-center';
+    hdr.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Opciones</span>';
+    const add=document.createElement('button'); add.type='button'; add.textContent='+ opción'; add.className='text-xs border border-primary text-primary px-2 py-1 hover:bg-primary hover:text-on-primary';
+    add.addEventListener('click', ()=>{ const nid=slugifyId('opcion_'+(retoState.opciones.length+1)); retoState.opciones.push({id:nid, texto:'Nueva opción'}); renderSubformReto(); actualizarVistaPreviaReto(); });
+    hdr.appendChild(add); wrap.appendChild(hdr);
+    retoState.opciones.forEach((op,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2 items-center';
+      const idInput=document.createElement('input'); idInput.type='text'; idInput.value=op.id; idInput.placeholder='id'; idInput.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs'; idInput.disabled=true; idInput.title='ID autogenerado, no editable';
+      const txtInput=document.createElement('input'); txtInput.type='text'; txtInput.value=op.texto; txtInput.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      txtInput.addEventListener('input', ()=>{ op.texto=txtInput.value; actualizarVistaPreviaReto(); });
+      const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error hover:bg-error hover:text-on-error';
+      del.addEventListener('click', ()=>{ retoState.opciones.splice(i,1); renderSubformReto(); actualizarVistaPreviaReto(); });
+      row.append(idInput, txtInput, del); wrap.appendChild(row);
+    });
+    cont.appendChild(wrap);
+  } else if(tipo==='respuesta_corta'){
+    const wrap=document.createElement('div'); wrap.className='space-y-3';
+    const modoRow=document.createElement('div'); modoRow.className='flex gap-2 items-center';
+    const selModo=document.createElement('select'); selModo.className='bg-surface-container-low border border-audit-border rounded px-2 py-1 text-xs';
+    [['texto','Texto'],['numero','Número']].forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; if(retoState.modo===v) o.selected=true; selModo.appendChild(o); });
+    selModo.addEventListener('change', ()=>{ retoState.modo=selModo.value; renderSubformReto(); actualizarVistaPreviaReto(); });
+    modoRow.append(document.createTextNode('Modo:'), selModo);
+    if(retoState.modo==='numero'){
+      const sufInput=document.createElement('input'); sufInput.type='text'; sufInput.placeholder='Sufijo ej. %'; sufInput.value=retoState.sufijo||''; sufInput.className='w-20 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      sufInput.addEventListener('input', ()=>{ retoState.sufijo=sufInput.value; actualizarVistaPreviaReto(); });
+      modoRow.append(sufInput);
+    }
+    wrap.appendChild(modoRow);
+    const phRow=document.createElement('label'); phRow.className='block';
+    phRow.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Placeholder</span>';
+    const phInput=document.createElement('input'); phInput.type='text'; phInput.value=retoState.placeholder||''; phInput.className='mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+    phInput.addEventListener('input', ()=>{ retoState.placeholder=phInput.value; actualizarVistaPreviaReto(); });
+    phRow.appendChild(phInput); wrap.appendChild(phRow);
+    if(retoState.modo==='numero'){
+      const numRow=document.createElement('div'); numRow.className='grid grid-cols-3 gap-2';
+      [['min','Mín'],['max','Máx'],['paso','Paso']].forEach(([k,label])=>{
+        const lab=document.createElement('label'); lab.className='block';
+        lab.innerHTML=`<span class="font-label-sm text-xs uppercase text-on-surface-variant">${label}</span>`;
+        const inp=document.createElement('input'); inp.type='number'; inp.step='any'; inp.value=retoState[k]??''; inp.className='mt-1 w-full bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+        inp.addEventListener('input', ()=>{ retoState[k]= inp.value===''? null : Number(inp.value); actualizarVistaPreviaReto(); });
+        lab.appendChild(inp); numRow.appendChild(lab);
+      });
+      wrap.appendChild(numRow);
+      // Respuesta número por rango (trampa 3 briefing): dos inputs propios para min/max de RESPUESTA
+      // separados de los de interaccion y de visual. No confundir con visual-rango.
+      const respRow=document.createElement('div'); respRow.className='border border-audit-border p-2 space-y-2';
+      respRow.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Respuesta correcta — rango (opcional, deja vacío para valor exacto)</span>';
+      const modoResp=document.createElement('div'); modoResp.className='flex gap-2';
+      const inpMin=document.createElement('input'); inpMin.type='number'; inpMin.step='any'; inpMin.placeholder='Mín (rango)'; inpMin.value= retoRespuestaExtra.min??'';
+      inpMin.className='w-1/2 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      const inpMax=document.createElement('input'); inpMax.type='number'; inpMax.step='any'; inpMax.placeholder='Máx'; inpMax.value= retoRespuestaExtra.max??'';
+      inpMax.className='w-1/2 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      inpMin.addEventListener('input', ()=>{ retoRespuestaExtra.min= inpMin.value===''? null : Number(inpMin.value); });
+      inpMax.addEventListener('input', ()=>{ retoRespuestaExtra.max= inpMax.value===''? null : Number(inpMax.value); });
+      modoResp.append(inpMin, inpMax);
+      respRow.append(modoResp);
+      const ayuda=document.createElement('p'); ayuda.className='font-label-sm text-xs text-on-surface-variant'; ayuda.textContent='Si dejás el rango vacío, la respuesta se toma del widget de abajo (valor exacto). Si ponés mín/máx, el widget debe tener un valor dentro del rango al probar, pero al guardar se usará el rango.';
+      respRow.appendChild(ayuda);
+      wrap.appendChild(respRow);
+    } else {
+      // Texto: la respuesta se marca en el widget de abajo, no en campo aparte (plan P5)
+      const info=document.createElement('p'); info.className='font-label-sm text-xs text-on-surface-variant border border-audit-border bg-surface-container-lowest p-2';
+      info.textContent='Escribí la respuesta correcta en el widget de abajo (después de "Actualizar vista previa"). No hay campo aparte.';
+      wrap.appendChild(info);
+    }
+    cont.appendChild(wrap);
+  } else if(tipo==='orden'){
+    const wrap=document.createElement('div'); wrap.className='space-y-2';
+    const hdr=document.createElement('div'); hdr.className='flex justify-between items-center';
+    hdr.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Ítems (orden correcto = respuesta)</span>';
+    const add=document.createElement('button'); add.type='button'; add.textContent='+ ítem'; add.className='text-xs border border-primary text-primary px-2 py-1';
+    add.addEventListener('click', ()=>{ const nid=slugifyId('item_'+(retoState.items.length+1)); retoState.items.push({id:nid, texto:'Nuevo ítem'}); renderSubformReto(); actualizarVistaPreviaReto(); });
+    hdr.appendChild(add); wrap.appendChild(hdr);
+    retoState.items.forEach((it,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2 items-center';
+      const idEl=document.createElement('input'); idEl.type='text'; idEl.value=it.id; idEl.disabled=true; idEl.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs opacity-60';
+      const txt=document.createElement('input'); txt.type='text'; txt.value=it.texto; txt.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      txt.addEventListener('input', ()=>{ it.texto=txt.value; actualizarVistaPreviaReto(); });
+      const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error';
+      del.addEventListener('click', ()=>{ retoState.items.splice(i,1); renderSubformReto(); actualizarVistaPreviaReto(); });
+      row.append(idEl, txt, del); wrap.appendChild(row);
+    });
+    const barajarRow=document.createElement('label'); barajarRow.className='flex items-center gap-2 text-xs';
+    const chk=document.createElement('input'); chk.type='checkbox'; chk.checked=!!retoState.barajar;
+    chk.addEventListener('change', ()=>{ retoState.barajar=chk.checked; actualizarVistaPreviaReto(); });
+    barajarRow.append(chk, document.createTextNode('Barajar al mostrar (recomendado)'));
+    wrap.appendChild(barajarRow);
+    cont.appendChild(wrap);
+  } else if(tipo==='checklist'){
+    const wrap=document.createElement('div'); wrap.className='space-y-2';
+    const hdr=document.createElement('div'); hdr.className='flex justify-between items-center';
+    hdr.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Ítems — marcar los correctos abajo en la vista previa</span>';
+    const add=document.createElement('button'); add.type='button'; add.textContent='+ ítem'; add.className='text-xs border border-primary text-primary px-2 py-1';
+    add.addEventListener('click', ()=>{ const nid=slugifyId('chk_'+(retoState.items.length+1)); retoState.items.push({id:nid, texto:'Nuevo ítem'}); renderSubformReto(); actualizarVistaPreviaReto(); });
+    hdr.appendChild(add); wrap.appendChild(hdr);
+    retoState.items.forEach((it,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2 items-center';
+      const idEl=document.createElement('input'); idEl.type='text'; idEl.value=it.id; idEl.disabled=true; idEl.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs opacity-60';
+      const txt=document.createElement('input'); txt.type='text'; txt.value=it.texto; txt.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      txt.addEventListener('input', ()=>{ it.texto=txt.value; actualizarVistaPreviaReto(); });
+      const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error';
+      del.addEventListener('click', ()=>{ retoState.items.splice(i,1); renderSubformReto(); actualizarVistaPreviaReto(); });
+      row.append(idEl, txt, del); wrap.appendChild(row);
+    });
+    cont.appendChild(wrap);
+  } else if(tipo==='clasificacion'){
+    const wrap=document.createElement('div'); wrap.className='space-y-3';
+    // Categorías
+    const catHdr=document.createElement('div'); catHdr.className='flex justify-between items-center';
+    catHdr.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Categorías</span>';
+    const addCat=document.createElement('button'); addCat.type='button'; addCat.textContent='+ categoría'; addCat.className='text-xs border border-primary text-primary px-2 py-1';
+    addCat.addEventListener('click', ()=>{ const nid=slugifyId('cat_'+(retoState.categorias.length+1)); retoState.categorias.push({id:nid, texto:'Nueva categoría'}); renderSubformReto(); actualizarVistaPreviaReto(); });
+    catHdr.appendChild(addCat); wrap.appendChild(catHdr);
+    retoState.categorias.forEach((cat,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2 items-center';
+      const idEl=document.createElement('input'); idEl.type='text'; idEl.value=cat.id; idEl.disabled=true; idEl.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs opacity-60';
+      const txt=document.createElement('input'); txt.type='text'; txt.value=cat.texto; txt.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      txt.addEventListener('input', ()=>{ cat.texto=txt.value; actualizarVistaPreviaReto(); });
+      const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error';
+      del.addEventListener('click', ()=>{ retoState.categorias.splice(i,1); renderSubformReto(); actualizarVistaPreviaReto(); });
+      row.append(idEl, txt, del); wrap.appendChild(row);
+    });
+    // Ítems
+    const itHdr=document.createElement('div'); itHdr.className='flex justify-between items-center';
+    itHdr.innerHTML='<span class="font-label-sm text-xs uppercase text-on-surface-variant">Ítems a clasificar — la categoría correcta se marca abajo</span>';
+    const addIt=document.createElement('button'); addIt.type='button'; addIt.textContent='+ ítem'; addIt.className='text-xs border border-primary text-primary px-2 py-1';
+    addIt.addEventListener('click', ()=>{ const nid=slugifyId('frase_'+(retoState.items.length+1)); retoState.items.push({id:nid, texto:'Nueva frase'}); renderSubformReto(); actualizarVistaPreviaReto(); });
+    itHdr.appendChild(addIt); wrap.appendChild(itHdr);
+    retoState.items.forEach((it,i)=>{
+      const row=document.createElement('div'); row.className='flex gap-2 items-center';
+      const idEl=document.createElement('input'); idEl.type='text'; idEl.value=it.id; idEl.disabled=true; idEl.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs opacity-60';
+      const txt=document.createElement('input'); txt.type='text'; txt.value=it.texto; txt.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+      txt.addEventListener('input', ()=>{ it.texto=txt.value; actualizarVistaPreviaReto(); });
+      const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error';
+      del.addEventListener('click', ()=>{ retoState.items.splice(i,1); renderSubformReto(); actualizarVistaPreviaReto(); });
+      row.append(idEl, txt, del); wrap.appendChild(row);
+    });
+    cont.appendChild(wrap);
+  }
+}
+function renderCierreSubform(){
+  const cont=$('reto-cierre-opciones-lista');
+  const wrap=$('reto-cierre-subform');
+  if(!wrap) return;
+  if(!retoState.cierre){ wrap.setAttribute('hidden',''); return; }
+  wrap.removeAttribute('hidden');
+  $('reto-cierre-enunciado').value = retoState.cierre.enunciado||'';
+  if(!cont) return;
+  cont.textContent='';
+  (retoState.cierre.opciones||[]).forEach((op,i)=>{
+    const row=document.createElement('div'); row.className='flex gap-2 items-center';
+    const idEl=document.createElement('input'); idEl.type='text'; idEl.value=op.id; idEl.disabled=true; idEl.className='w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs opacity-60';
+    const txt=document.createElement('input'); txt.type='text'; txt.value=op.texto; txt.className='flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+    txt.addEventListener('input', ()=>{ op.texto=txt.value; actualizarVistaPreviaReto(); });
+    const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error';
+    del.addEventListener('click', ()=>{ retoState.cierre.opciones.splice(i,1); renderCierreSubform(); actualizarVistaPreviaReto(); });
+    row.append(idEl, txt, del); cont.appendChild(row);
+  });
+}
+function construirInteraccionDesdeRetoState(){
+  const inter={ tipo: retoState.tipo, enunciado: ($('reto-enunciado')?.value||'').trim() };
+  if(!inter.enunciado) inter.enunciado='Pregunta';
+  if(retoState.tipo==='opcion_unica'){
+    inter.opciones = retoState.opciones.map(o=> ({id:o.id, texto:o.texto}));
+  } else if(retoState.tipo==='respuesta_corta'){
+    inter.modo = retoState.modo;
+    if(retoState.placeholder) inter.placeholder=retoState.placeholder;
+    if(retoState.modo==='numero'){
+      if(retoState.min!=null) inter.min=retoState.min;
+      if(retoState.max!=null) inter.max=retoState.max;
+      if(retoState.paso!=null) inter.paso=retoState.paso;
+      if(retoState.sufijo) inter.sufijo=retoState.sufijo;
+    }
+  } else if(retoState.tipo==='orden'){
+    inter.items = retoState.items.map(it=> ({id:it.id, texto:it.texto}));
+    inter.barajar = !!retoState.barajar;
+  } else if(retoState.tipo==='checklist'){
+    inter.items = retoState.items.map(it=> ({id:it.id, texto:it.texto}));
+  } else if(retoState.tipo==='clasificacion'){
+    inter.items = retoState.items.map(it=> ({id:it.id, texto:it.texto}));
+    inter.categorias = retoState.categorias.map(c=> ({id:c.id, texto:c.texto}));
+  }
+  if(retoState.cierre){
+    inter.cierre = { enunciado: $('reto-cierre-enunciado')?.value.trim() || retoState.cierre.enunciado, opciones: retoState.cierre.opciones.map(o=> ({id:o.id, texto:o.texto})) };
+  }
+  return inter;
+}
+function construirRespuestaDesdeReto(){
+  // Lee la respuesta marcada en #reto-widget-marcar vía serializarRespuesta(),
+  // con el contenedor explícito: hay otro widget vivo en la misma pantalla
+  // ("probar sala"), y depender del "último renderizado" global es la trampa
+  // que ya mordió acá (js/render.js, `_porContenedor`).
+  const marcada = serializarRespuesta($('reto-widget-marcar'));
+  // Para respuesta_corta modo numero con rango, no viene de serializar sino de extra inputs
+  if(retoState.tipo==='respuesta_corta' && retoState.modo==='numero' && (retoRespuestaExtra.min!=null || retoRespuestaExtra.max!=null)){
+    const out={};
+    if(retoRespuestaExtra.min!=null) out.min=retoRespuestaExtra.min;
+    if(retoRespuestaExtra.max!=null) out.max=retoRespuestaExtra.max;
+    if(marcada.cierre) out.cierre=marcada.cierre;
+    return out;
+  }
+  return marcada;
+}
+function actualizarVistaPreviaReto(){
+  const inter = construirInteraccionDesdeRetoState();
+  const widgetMarcar=$('reto-widget-marcar');
+  if(widgetMarcar){
+    renderInteraccion(widgetMarcar, inter);
+  }
+  const extra=$('reto-widget-extra');
+  if(extra){
+    extra.textContent='';
+    // Para respuesta_corta numero con rango, mostrar nota
+    if(retoState.tipo==='respuesta_corta' && retoState.modo==='numero' && (retoRespuestaExtra.min!=null || retoRespuestaExtra.max!=null)){
+      const p=document.createElement('p'); p.className='font-label-sm text-xs text-on-surface-variant';
+      p.textContent=`Rango configurado: ${retoRespuestaExtra.min??'—'} a ${retoRespuestaExtra.max??'—'} — la vista previa numérica sigue mostrando un input, pero al guardar se usará el rango.`;
+      extra.appendChild(p);
+    }
+  }
+  // Visual preview
+  const vp=$('visual-preview');
+  if(vp){
+    vp.textContent='';
+    const vis = construirVisualDesdeForm();
+    if(vis){
+      const g=crearGrafico(vis);
+      if(g) vp.appendChild(g);
+    }
+  }
+  // Mostrar bloque de probar si la sala ya existe en servidor (tiene id) y
+  // renderizar SU PROPIO widget acá — no en ejecutarProbar(). render.js
+  // guarda el estado de cada widget por contenedor (WeakMap), así que este
+  // render no pisa el de #reto-widget-marcar de arriba: son dos widgets
+  // vivos e independientes. Mismo criterio que ya aplicaba la vista previa
+  // de marcar (se reconstruye en cada tecleo, current el reto vigente).
+  const probarBloque=$('reto-probar-bloque');
+  if(probarBloque){
+    if(salaActivaP5?.id){
+      probarBloque.removeAttribute('hidden');
+      const probarWidget=$('reto-probar-widget');
+      if(probarWidget) renderInteraccion(probarWidget, inter);
+      const resultadoEl=$('reto-probar-resultado');
+      if(resultadoEl) resultadoEl.textContent='Interactuá arriba y luego presioná Probar.';
+    } else {
+      probarBloque.setAttribute('hidden','');
+    }
+  }
+}
+function construirVisualDesdeForm(){
+  const tipo=$('visual-tipo')?.value||'';
+  if(!tipo) return null;
+  const titulo=$('visual-titulo')?.value.trim()||'';
+  const unidad=$('visual-unidad')?.value.trim()||'';
+  const pie=$('visual-pie')?.value.trim()||'';
+  const seriesRows=$('visual-series-lista')?.querySelectorAll('.visual-serie-row')||[];
+  const series=[];
+  seriesRows.forEach(row=>{
+    const et=row.querySelector('.visual-serie-etiqueta')?.value.trim()||'';
+    const val=Number(row.querySelector('.visual-serie-valor')?.value);
+    const nota=row.querySelector('.visual-serie-nota')?.value.trim()||'';
+    if(et && !isNaN(val)) series.push({ etiqueta: et, valor: val, ...(nota?{nota}:{}) });
+  });
+  if(!series.length) return null;
+  const rangoMin=$('visual-rango-min')?.value;
+  const rangoMax=$('visual-rango-max')?.value;
+  const rangoEtiqueta=$('visual-rango-etiqueta')?.value.trim();
+  let rango=null;
+  if(rangoMin!=='' && rangoMax!=='' && rangoMin!=null && rangoMax!=null && rangoMin!==undefined){
+    const mn=Number(rangoMin), mx=Number(rangoMax);
+    if(!isNaN(mn) && !isNaN(mx)) rango={ min: mn, max: mx, ...(rangoEtiqueta?{etiqueta:rangoEtiqueta}:{}) };
+  }
+  return { tipo, titulo, unidad, series, ...(pie?{pie}:{}), ...(rango?{rango}:{}) };
+}
+function renderVisualForm(){
+  const tipoSel=$('visual-tipo');
+  const campos=$('visual-campos');
+  if(!tipoSel || !campos) return;
+  const vis = retoState.visual;
+  if(vis){
+    tipoSel.value=vis.tipo||'';
+    $('visual-titulo').value=vis.titulo||'';
+    $('visual-unidad').value=vis.unidad||'';
+    $('visual-pie').value=vis.pie||'';
+    $('visual-rango-min').value=vis.rango?.min??'';
+    $('visual-rango-max').value=vis.rango?.max??'';
+    $('visual-rango-etiqueta').value=vis.rango?.etiqueta||'';
+    renderSeriesList(vis.series||[]);
+  } else {
+    renderSeriesList([]);
+  }
+  if(tipoSel.value) campos.removeAttribute('hidden'); else campos.setAttribute('hidden','');
+}
+function renderSeriesList(series){
+  const cont=$('visual-series-lista');
+  if(!cont) return;
+  cont.textContent='';
+  series.forEach((s,i)=>{
+    cont.appendChild(crearFilaSerie(s,i));
+  });
+}
+function crearFilaSerie(s, idx){
+  const row=document.createElement('div'); row.className='visual-serie-row flex gap-2 items-center border border-audit-border p-2 rounded';
+  const et=document.createElement('input'); et.type='text'; et.value=s.etiqueta||''; et.placeholder='Etiqueta'; et.className='visual-serie-etiqueta flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+  const val=document.createElement('input'); val.type='number'; val.step='any'; val.value=s.valor??''; val.placeholder='Valor'; val.className='visual-serie-valor w-24 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+  const nota=document.createElement('input'); nota.type='text'; nota.value=s.nota||''; nota.placeholder='Nota'; nota.className='visual-serie-nota flex-1 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
+  const del=document.createElement('button'); del.type='button'; del.textContent='×'; del.className='px-2 border border-error text-error hover:bg-error hover:text-on-error';
+  del.addEventListener('click', ()=>{ row.remove(); actualizarVistaPreviaReto(); });
+  [et,val,nota].forEach(inp=> inp.addEventListener('input', ()=> actualizarVistaPreviaReto()));
+  row.append(et,val,nota,del); return row;
+}
+async function ejecutarProbar(){
+  // NO re-renderizar acá: el widget ya está vivo desde que se abrió el
+  // constructor o desde el último tecleo (actualizarVistaPreviaReto() lo
+  // arma). Re-renderizarlo justo antes de serializar era exactamente el bug
+  // — borraba lo que el docente acababa de marcar, medio milisegundo antes
+  // de leerlo (js/render.js `_porContenedor`, más arriba). serializarRespuesta
+  // ahora lee el estado de ESTE contenedor puntual, así que ni siquiera
+  // importa qué se haya renderizado después en #reto-widget-marcar.
+  const probarWidget=$('reto-probar-widget');
+  const respuesta = serializarRespuesta(probarWidget);
+  // Si es respuesta_corta numero con rango, usar el rango
+  let payload = respuesta;
+  if(retoState.tipo==='respuesta_corta' && retoState.modo==='numero' && (retoRespuestaExtra.min!=null || retoRespuestaExtra.max!=null)){
+    payload={ min: retoRespuestaExtra.min, max: retoRespuestaExtra.max, ...(respuesta.cierre?{cierre:respuesta.cierre}:{}) };
+    // Si no hay valor exacto, payload es el rango; probar con un valor dentro del rango simulado
+    // Para probar, enviamos el punto medio del rango como valor
+    if(payload.min!=null && payload.max!=null) payload={ valor: (payload.min+payload.max)/2, ...(payload.cierre?{cierre:payload.cierre}:{}) };
+  }
+  // Si está vacío, igual se envía para que el servidor responda detalle vacio
+  const {datos, error} = await Contenido.probarEstacion(salaActivaP5.id, payload);
+  const resEl=$('reto-probar-resultado');
+  if(!resEl) return;
+  if(error){ resEl.textContent=error.mensaje||'Error al probar.'; resEl.className='font-evidence-data text-sm text-error'; return; }
+  const ok = datos?.ok || datos?.correcto;
+  const detalle = datos?.detalle||'';
+  const pista = datos?.pista||'';
+  resEl.className='font-evidence-data text-sm '+(ok?'text-primary':'text-on-surface-variant');
+  resEl.textContent = ok? `✓ Correcto — ${datos.codigo||''} ${datos.feedback||''}` : `Detalle: ${detalle} ${pista? '· Pista: '+pista: ''}`;
+}
+async function guardarRetoP5(){
+  if(!salaActivaP5){ mostrarMensajeContenido('Ninguna sala seleccionada.'); return; }
+  const inter = construirInteraccionDesdeRetoState();
+  if(inter.tipo==='opcion_unica' && (!inter.opciones || inter.opciones.length<2)){ mostrarMensajeContenido('Opción única necesita al menos 2 opciones.'); return; }
+  if((inter.tipo==='orden' || inter.tipo==='checklist') && (!inter.items || inter.items.length<2)){ mostrarMensajeContenido('Se necesitan al menos 2 ítems.'); return; }
+  if(inter.tipo==='clasificacion' && (!inter.items?.length || !inter.categorias?.length)){ mostrarMensajeContenido('Clasificación necesita ítems y categorías.'); return; }
+  // Capturar respuesta desde el widget YA renderizado — NO re-renderizar acá
+  // porque renderInteraccion() pisa el _estado singleton y borra la marca
+  // que el docente acaba de hacer (trampa 1 y 2 del briefing).
+  let respuesta = construirRespuestaDesdeReto();
+  // Si respuesta está vacía y es opcion_unica/checklist etc, advertir
+  if(!respuesta.valor && !(respuesta.min!=null || respuesta.max!=null)){
+    if(!confirm('No marcaste ninguna respuesta correcta en la vista previa. ¿Guardar igual? El servidor rechazará si la respuesta no coincide con la interaccion.')) return;
+  }
+  // Validar que la respuesta apunte a ids existentes (el servidor hará lo mismo, pero avisar antes)
+  const visual = construirVisualDesdeForm();
+  // Actualizar caches
+  retoState.visual = visual;
+  salaActivaP5.interaccion = inter;
+  salaActivaP5.respuesta = respuesta;
+  salaActivaP5.visual = visual;
+  // Guardar via PUT estaciones/:id — necesita payload completo de sala, no solo interaccion
+  // Reusar datos de la sala actual (titulo etc) — ya están en salaActivaP5
+  const payload={
+    titulo: salaActivaP5.titulo, pilar: salaActivaP5.pilar, narrativa: salaActivaP5.narrativa, reto: salaActivaP5.reto,
+    datos: salaActivaP5.datos, pistas: salaActivaP5.pistas, feedback_ok: salaActivaP5.feedback_ok, codigo: salaActivaP5.codigo,
+    interaccion: inter, respuesta: respuesta, desbloqueo: salaActivaP5.desbloqueo, icono: salaActivaP5.icono, visual: visual
+  };
+  const {datos, error} = await Contenido.actualizarEstacion(salaActivaP5.id, payload);
+  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo guardar el reto: ${error.campo||''}`); return; }
+  mostrarMensajeContenido('Reto guardado.', 'ok');
+  salaActivaP5=datos;
+  const idx=salasP5.findIndex(s=> String(s.id)===String(datos.id));
+  if(idx>=0) salasP5[idx]=datos;
+  setVistaP5('mision');
+  // Refrescar preview de la sala
+  const resumen=$('sala-reto-resumen');
+  if(resumen) resumen.textContent=`Mecanismo: ${inter.tipo}${inter.cierre?' + cierre':''} — guardado ✓`;
+}
+function enlazarEventosP5(){
+  // Evitar doble bind
+  if(window._p5EventosBound) return;
+  window._p5EventosBound=true;
+  $('btn-mostrar-nueva-mision')?.addEventListener('click', ()=> $('form-nueva-mision')?.removeAttribute('hidden'));
+  $('btn-cancelar-nueva-mision')?.addEventListener('click', ()=> $('form-nueva-mision')?.setAttribute('hidden',''));
+  $('form-nueva-mision')?.addEventListener('submit', crearMision);
+  $('btn-volver-biblioteca')?.addEventListener('click', async ()=>{ setVistaP5('biblioteca'); await cargarBiblioteca(); });
+  $('btn-guardar-mision')?.addEventListener('click', guardarMisionP5);
+  $('mision-codigo-auto')?.addEventListener('change', (e)=>{
+    const inp=$('mision-codigo-maestro');
+    if(inp) inp.disabled=e.target.checked;
+  });
+  $('btn-publicar-mision')?.addEventListener('click', async ()=>{
+    if(!misionActivaP5) return;
+    const {error}=await Contenido.publicarMision(misionActivaP5.id);
+    if(error) mostrarMensajeContenido(error.mensaje||'No se pudo publicar.');
+    else { mostrarMensajeContenido('Misión publicada.','ok'); await cargarBiblioteca(); await abrirMision(misionActivaP5.id); }
+  });
+  $('btn-duplicar-mision')?.addEventListener('click', async ()=>{
+    if(!misionActivaP5) return;
+    await duplicarMision(misionActivaP5.id);
+  });
+  $('btn-borrar-mision')?.addEventListener('click', ()=>{
+    if(!misionActivaP5) return;
+    borrarMision(misionActivaP5.id, misionActivaP5.titulo);
+  });
+  $('btn-agregar-sala')?.addEventListener('click', agregarSalaP5);
+  $('btn-guardar-sala')?.addEventListener('click', guardarSalaP5);
+  $('btn-borrar-sala')?.addEventListener('click', borrarSalaP5);
+  $('btn-sala-agregar-dato')?.addEventListener('click', ()=>{
+    datosListaP5.push({clave:'', tipo:'texto', valor:''});
+    renderEditorDatosP5(datosListaAObjeto(datosListaP5));
+    actualizarVistaPreviaSalaP5();
+  });
+  $('btn-sala-agregar-pista')?.addEventListener('click', ()=>{
+    pistasListaP5.push('');
+    renderEditorPistasP5(pistasListaP5);
+  });
+  $('sala-titulo')?.addEventListener('input', actualizarVistaPreviaSalaP5);
+  $('sala-pilar')?.addEventListener('input', actualizarVistaPreviaSalaP5);
+  $('btn-ir-constructor-reto')?.addEventListener('click', ()=>{
+    if(!salaActivaP5){ mostrarMensajeContenido('Elegí una sala primero.'); return; }
+    setVistaP5('reto');
+    initConstructorDesdeSala();
+  });
+  $('btn-volver-mision')?.addEventListener('click', ()=>{
+    setVistaP5('mision');
+    // Al volver, refrescar preview de la sala por si el constructor cambió algo sin guardar
+    actualizarVistaPreviaSalaP5();
+  });
+  $('reto-mecanismo')?.addEventListener('change', (e)=>{
+    retoState.tipo=e.target.value;
+    // Resetear sub-estado al cambiar de tipo para no mezclar
+    retoState.respuesta={valor:null};
+    retoRespuestaExtra={min:null,max:null};
+    renderSubformReto();
+    actualizarVistaPreviaReto();
+  });
+  $('reto-enunciado')?.addEventListener('input', (e)=>{ retoState.enunciado=e.target.value; actualizarVistaPreviaReto(); });
+  $('reto-cierre-activo')?.addEventListener('change', (e)=>{
+    if(e.target.checked){
+      if(!retoState.cierre) retoState.cierre={ enunciado:'¿Es engañosa?', opciones:[{id:'si', texto:'Sí'},{id:'no', texto:'No'}] };
+    } else retoState.cierre=null;
+    renderCierreSubform();
+    actualizarVistaPreviaReto();
+  });
+  $('reto-cierre-enunciado')?.addEventListener('input', (e)=>{ if(retoState.cierre) retoState.cierre.enunciado=e.target.value; actualizarVistaPreviaReto(); });
+  $('btn-reto-cierre-agregar-opcion')?.addEventListener('click', ()=>{
+    if(!retoState.cierre) retoState.cierre={ enunciado:'', opciones:[] };
+    const nid=slugifyId('cierre_'+(retoState.cierre.opciones.length+1));
+    retoState.cierre.opciones.push({id:nid, texto:'Nueva opción'});
+    renderCierreSubform(); actualizarVistaPreviaReto();
+  });
+  $('btn-reto-actualizar-vista')?.addEventListener('click', actualizarVistaPreviaReto);
+  $('btn-visual-agregar-serie')?.addEventListener('click', ()=>{
+    const cont=$('visual-series-lista');
+    if(!cont) return;
+    cont.appendChild(crearFilaSerie({etiqueta:'', valor:0, nota:''}, cont.children.length));
+    actualizarVistaPreviaReto();
+  });
+  $('visual-tipo')?.addEventListener('change', ()=>{
+    const campos=$('visual-campos');
+    if($('visual-tipo').value) campos?.removeAttribute('hidden'); else campos?.setAttribute('hidden','');
+    actualizarVistaPreviaReto();
+  });
+  ['visual-titulo','visual-unidad','visual-pie','visual-rango-min','visual-rango-max','visual-rango-etiqueta'].forEach(id=>{
+    $(id)?.addEventListener('input', actualizarVistaPreviaReto);
+  });
+  $('btn-visual-actualizar-vista')?.addEventListener('click', actualizarVistaPreviaReto);
+  $('btn-probar-sala')?.addEventListener('click', ejecutarProbar);
+  $('btn-guardar-reto')?.addEventListener('click', guardarRetoP5);
+  // Intervenir crearSesion para mandar mision_id si hay selección
+  const formSesion=$('form-sesion');
+  if(formSesion){
+    formSesion.addEventListener('submit', (e)=>{
+      const sel=$('sesion-mision');
+      if(sel && sel.value){
+        // El handler original crearSesion() lee del DOM — inyectar mision_id ahí
+        // Se hace monkey-patch sobre Docente.crearSesion es más limpio, pero
+        // interceptamos acá para no tocar logica vieja: si hay valor, lo agregamos al FormData
+        // El handler crearSesion() ya fue enlazado; este listener corre después.
+        // Necesitamos que crearSesion() lo lea — así que seteamos un atributo que crearSesion pueda leer.
+        formSesion.dataset.misionId = sel.value;
+      } else {
+        delete formSesion.dataset.misionId;
+      }
+    });
+  }
+}
+
+// Patch crearSesion para respetar mision_id del select
+const _crearSesionOriginal = crearSesion;
+async function crearSesionPatched(e){
+  e.preventDefault();
+  const nombreEl=$('sesion-nombre');
+  const durEl=$('sesion-duracion');
+  const nombre=(nombreEl?.value||'').trim();
+  const dur=parseInt(durEl?.value||'50',10);
+  if(!nombre || nombre.length<3){ mostrarMensajeDocente('Nombre de sesión requerido (≥3 caracteres).'); nombreEl?.focus(); return; }
+  const misionId = $('sesion-mision')?.value || $('form-sesion')?.dataset.misionId || null;
+  const payload={nombre, duracion_minutos: dur};
+  if(misionId) payload.mision_id=misionId;
+  const {datos, error} = await Docente.crearSesion(payload);
+  if(error){ mostrarMensajeDocente(error.mensaje||'No se pudo crear la sesión.'); return; }
+  mostrarMensajeDocente(`Sesión "${nombre}" creada.`,'ok');
+  nombreEl.value='';
+  await cargarSesiones();
+  if(datos?.id && sesionActivaId!==datos.id) seleccionarSesion(datos.id, datos.estado||'borrador');
+}
+// Reemplazar el listener viejo (enlazarEventos ya lo puso) — quitar y poner el parcheado
+setTimeout(()=>{
+  const form=$('form-sesion');
+  if(form){
+    // Clonar para quitar todos los listeners viejos es más seguro que removeEventListener sin referencia
+    const clone=form.cloneNode(true);
+    form.parentNode.replaceChild(clone, form);
+    clone.addEventListener('submit', crearSesionPatched);
+    // Re-enlazar btn-nueva-sesion que también estaba en enlazarEventos (no afecta)
+    $('btn-nueva-sesion')?.addEventListener('click', ()=>{ $('sesion-nombre')?.focus(); window.scrollTo({top:0, behavior:'smooth'}); });
+  }
+},0);
+
 // "Ver sesión en curso" (2026-08-26): solo tiene sentido cuando hay algo
-// en curso — se muestra únicamente con la sesión abierta. Baja a Monitoreo
-// en vivo, que ya se refresca solo cada 15s mientras hay sesión activa.
 function sincronizarBotonVerSesion(){
   const btn = $('btn-ver-sesion');
   if(btn){
@@ -917,6 +2085,7 @@ function sincronizarSelectRubrica(){
   // conservar la selección si el equipo elegido sigue existiendo tras el refresco
   if(previo && equiposActuales.some(eq=>eq.id===previo)) sel.value=previo;
   pintarEvidenciaRubrica();
+  cargarCalificacionEquipo();
 }
 
 // Progreso real del equipo elegido — reutiliza desempenoActual (ya venía
@@ -940,7 +2109,7 @@ function pintarEvidenciaRubrica(){
   }
   const filas = [
     ['Integrantes', Array.isArray(fila.integrantes) ? fila.integrantes.join(', ') : (fila.integrantes||'—')],
-    ['Estaciones resueltas', `${fila.estaciones_resueltas ?? 0} / 5`],
+    ['Estaciones resueltas', `${fila.estaciones_resueltas ?? 0} / ${fila.total_salas ?? '—'}`],
     ['Intentos totales', fila.intentos_totales ?? 0],
     ['Tiempo usado', fila.tiempo_usado_segundos!=null ? `${Math.floor(fila.tiempo_usado_segundos/60)} min` : '—'],
     ['Estado', fila.motivo_fin || (fila.finalizado_en ? 'finalizado' : (fila.iniciado_en ? 'en curso' : 'sin iniciar'))],
@@ -952,6 +2121,36 @@ function pintarEvidenciaRubrica(){
     row.append(k,v);
     cont.appendChild(row);
   });
+}
+
+async function cargarCalificacionEquipo(){
+  const sel = $('rubrica-equipo');
+  const equipoId = sel?.value || '';
+  const form = $('form-rubrica');
+  if(!form) return;
+  // limpiar primero para no mostrar calificación vieja de otro equipo
+  form.reset();
+  if(!equipoId) return;
+  const {datos, error} = await Docente.calificacion(equipoId);
+  if(error || !datos) return; // sin calificación previa
+  // pre-llenar radios y campos
+  for(const campo of ['uso_evidencia','distincion_dato','pensamiento_critico','trabajo_equipo']){
+    const val = datos[campo];
+    if(val!=null){
+      const radio = form.querySelector(`input[name="${campo}"][value="${val}"]`);
+      if(radio) radio.checked = true;
+    }
+  }
+  if(datos.nota_final!=null) $('rubrica-nota').value = datos.nota_final;
+  if(datos.observaciones!=null) $('rubrica-observaciones').value = datos.observaciones;
+  // marcar como vinculada: dejar evidencia visible con estado
+  const cont = $('rubrica-evidencia-contenido');
+  if(cont){
+    const badge=document.createElement('p'); badge.className='mt-3 font-evidence-data text-xs text-primary border border-primary/30 bg-primary/10 px-2 py-1';
+    const f = datos.actualizada_en ? new Date(datos.actualizada_en).toLocaleString('es-SV') : '';
+    badge.textContent = `Calificación vinculada a este equipo${f?' — actualizada '+f:''}.`;
+    cont.appendChild(badge);
+  }
 }
 
 async function handleNuevoEquipo(){
@@ -993,6 +2192,112 @@ async function handleAnonimizar(){
   else alert(`Anonimizados ${datos?.perfiles_anonimizados??'–'} perfiles`);
 }
 
+// P6-interfaz: Armar equipos automáticamente
+function mostrarMensajeArmar(texto, tipo){
+  const el=$('armar-mensaje');
+  if(!el) return;
+  el.textContent=texto;
+  el.classList.toggle('border-primary', tipo==='ok');
+  el.classList.toggle('text-primary', tipo==='ok');
+  el.classList.toggle('bg-primary/10', tipo==='ok');
+  el.classList.toggle('border-error', tipo!=='ok');
+  el.classList.toggle('text-error', tipo!=='ok');
+  el.classList.toggle('bg-error/10', tipo!=='ok');
+  el.classList.toggle('border-audit-border', false);
+  el.removeAttribute('hidden');
+  // no scrollIntoView — el banner está en la misma sección, ya visible
+}
+function calcularPreviewEquipos(total, modo, valor){
+  if(!total || !valor) return 0;
+  if(modo==='por_cantidad') return Math.min(valor, total) || 1;
+  const n=Math.floor(total/valor);
+  return n>0 ? n : 1;
+}
+async function handleArmarEquipos(){
+  if(!sesionActivaId){ mostrarMensajeArmar('Seleccioná una sesión arriba.'); return; }
+  const modoEl=$('armar-modo');
+  const valorEl=$('armar-valor');
+  const modo=modoEl?.value;
+  const valor=parseInt(valorEl?.value,10);
+  if(!modo || !valor || valor<1){ mostrarMensajeArmar('Elegí modo y valor válido (≥1).'); return; }
+  const btn=$('btn-armar-equipos');
+  if(btn) btn.disabled=true;
+  // Obtener conteo real de sin equipo para el confirm
+  let totalSinEquipo=0;
+  try{
+    const r=await Docente.registrados(sesionActivaId);
+    totalSinEquipo=Array.isArray(r.datos)? r.datos.length : 0;
+  }catch{ totalSinEquipo=0; }
+  if(totalSinEquipo===0){
+    mostrarMensajeArmar('No queda nadie sin equipo en esta sesión.');
+    if(btn) btn.disabled=false;
+    return;
+  }
+  const numEquipos=calcularPreviewEquipos(totalSinEquipo, modo, valor);
+  const mensajeConfirm= modo==='por_tamano'
+    ? `Se van a repartir ${totalSinEquipo} estudiantes sin equipo en ${numEquipos} equipos. ¿Continuar?`
+    : `Se van a repartir ${totalSinEquipo} estudiantes sin equipo en ${numEquipos} equipos (por cantidad). ¿Continuar?`;
+  if(!confirm(mensajeConfirm)){ if(btn) btn.disabled=false; return; }
+  const {datos, error}=await Docente.armarEquipos(sesionActivaId, {modo, valor});
+  if(btn) btn.disabled=false;
+  if(error){
+    mostrarMensajeArmar(error.mensaje||'No se pudo armar equipos.');
+    return;
+  }
+  const equipos=Array.isArray(datos?.equipos)? datos.equipos : (Array.isArray(datos)? datos : []);
+  if(equipos.length===0){
+    mostrarMensajeArmar('No se armó ningún equipo nuevo: no quedaba nadie sin equipo.', 'ok');
+    const res=$('armar-resultado'); if(res) res.setAttribute('hidden','');
+    return;
+  }
+  mostrarMensajeArmar(`Se armaron ${equipos.length} equipos.`, 'ok');
+  pintarResultadoArmar(equipos);
+  // Refrescar listas existentes (equipos, registrados, monitoreo)
+  await cargarEquiposYMonitoreo();
+  await cargarRegistrados();
+}
+function pintarResultadoArmar(equipos){
+  const cont=$('armar-resultado');
+  const tbody=document.querySelector('#tabla-armar tbody');
+  if(!cont || !tbody) return;
+  // Limpiar
+  while(tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  equipos.forEach(eq=>{
+    const tr=document.createElement('tr');
+    const tdEquipo=document.createElement('td'); tdEquipo.textContent=eq.nombre||eq.id;
+    const tdIntegrantes=document.createElement('td'); tdIntegrantes.textContent=Array.isArray(eq.integrantes)? eq.integrantes.map(i=> typeof i==='string'? i : (i.nombre||i.correo||'')).join(', ') : '';
+    const tdApuntador=document.createElement('td');
+    const apuntador=eq.apuntador || (Array.isArray(eq.integrantes)? eq.integrantes.find(i=> i.es_apuntador) : null);
+    tdApuntador.textContent= apuntador ? (apuntador.nombre||apuntador.correo||'') : (eq.apuntador?.nombre||'');
+    if(apuntador) tdApuntador.textContent+=' ★';
+    const tdCodigo=document.createElement('td'); tdCodigo.textContent=eq.codigo||''; tdCodigo.className='font-mono';
+    tdCodigo.setAttribute('aria-label','Código de acceso');
+    tr.append(tdEquipo, tdIntegrantes, tdApuntador, tdCodigo);
+    tbody.appendChild(tr);
+  });
+  cont.removeAttribute('hidden');
+  // Guardar para copiar
+  cont._equiposCache=equipos;
+}
+async function handleCopiarArmar(){
+  const cont=$('armar-resultado');
+  const equipos=cont?._equiposCache||[];
+  if(!equipos.length) return;
+  const texto=equipos.map(eq=>{
+    const integrantes=Array.isArray(eq.integrantes)? eq.integrantes.map(i=> typeof i==='string'? i : (i.nombre||i.correo||'')).join(', ') : '';
+    const apuntador=eq.apuntador?.nombre||eq.apuntador?.correo||'';
+    return `${eq.nombre}\t${integrantes}\t${apuntador}\t${eq.codigo||''}`;
+  }).join('\n');
+  const header='Equipo\tIntegrantes\tApuntador\tCódigo\n';
+  try{
+    await navigator.clipboard.writeText(header+texto);
+    mostrarMensajeArmar('Copiado al portapapeles.', 'ok');
+  }catch{
+    // Fallback: prompt con texto
+    prompt('Copiá manualmente:', header+texto);
+  }
+}
+
 function enlazarEventos(){
   $('form-sesion')?.addEventListener('submit', crearSesion);
   $('btn-nueva-sesion')?.addEventListener('click', ()=>{ $('sesion-nombre')?.focus(); window.scrollTo({top:0, behavior:'smooth'}); });
@@ -1012,7 +2317,9 @@ function enlazarEventos(){
   $('btn-nuevo-equipo')?.addEventListener('click', handleNuevoEquipo);
   $('btn-exportar-csv')?.addEventListener('click', handleExportarCSV);
   $('btn-anonimizar')?.addEventListener('click', handleAnonimizar);
-  $('rubrica-equipo')?.addEventListener('change', pintarEvidenciaRubrica);
+  $('btn-armar-equipos')?.addEventListener('click', handleArmarEquipos);
+  $('btn-copiar-armar')?.addEventListener('click', handleCopiarArmar);
+  $('rubrica-equipo')?.addEventListener('change', ()=>{ pintarEvidenciaRubrica(); cargarCalificacionEquipo(); });
   $('form-rubrica')?.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const fd=new FormData(e.target);
@@ -1023,7 +2330,11 @@ function enlazarEventos(){
     const nombreEquipo = equiposActuales.find(eq=>eq.id===equipoId)?.nombre || '';
     const {error} = await Docente.guardarCalificacion(equipoId, rubrica);
     if(error) mostrarMensajeDocente(error.mensaje||'No se pudo guardar la calificación.');
-    else mostrarMensajeDocente(`Calificación de "${nombreEquipo}" guardada.`, 'ok');
+    else {
+      mostrarMensajeDocente(`Calificación de "${nombreEquipo}" vinculada y guardada.`, 'ok');
+      // recarga el vínculo para que quede visible sin tener que cambiar de equipo
+      await cargarCalificacionEquipo();
+    }
   });
 }
 

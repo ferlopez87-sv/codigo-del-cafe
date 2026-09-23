@@ -1,9 +1,26 @@
 // _src/js/render.js — cl-render
-// Dueño: cl-render. Contrato: CONTRACT.md §11 (tipos), §12 (forma respuesta), §13 (a11y), §14.4 (sanitizacion), §16.2 (dataviz).
+// Dueño: cl-render. Contrato: CONTRACT.md §11 (tipos), §12 (forma respuesta), §13 (a11y), §14.4 (sanitizacion).
 // Vanilla JS module. Sin logica de verificacion, solo render + serializacion.
 // Todo texto de usuario con textContent + createElement. Nunca usar HTML inyectado para datos.
-import { crearGraficoE2, crearGraficoE3 } from './dataviz.js';
+// El gráfico (estacion.visual) ya no se inyecta desde acá — lo llama el orquestador
+// (js/juego.js) explícitamente con js/dataviz.js#crearGrafico(visual). Ver
+// plan-motor-misiones.md §1, paquete P2.
 
+// _estado apunta siempre al último renderInteraccion(), para no romper a
+// quien llama serializarRespuesta() sin argumento (js/juego.js: un solo
+// widget vivo a la vez, sin ambigüedad posible). _porContenedor guarda el
+// mismo objeto de estado por contenedor — permite leer un widget específico
+// aunque otro se haya renderizado después en otra parte de la página.
+//
+// Se agregó 2026-09-23: el editor del docente (P5) renderiza DOS widgets
+// vivos a la vez —"marcar respuesta" y "probar sala"— y cualquier tecleo en
+// el resto del formulario re-renderiza el primero. Con un solo estado
+// global, "último renderizado" y "el que quiero leer" dejan de ser lo
+// mismo: ya produjo el mismo bug tres veces (guardarReto, un caso
+// documentado por opencode, y "Probar sala" que siempre leía vacío porque
+// se re-renderizaba a sí mismo justo antes de serializar). La causa era
+// estructural, no un caso más para parchear.
+const _porContenedor = new WeakMap();
 let _estado = {
   tipo: null,
   interaccion: null,
@@ -116,6 +133,71 @@ function _ordenSincronizar(casillas, bandeja, live) {
   if (bandeja) bandeja.dataset.vacia = bandeja.querySelector('.orden-tarjeta') ? 'false' : 'true';
 }
 
+// Selección única (opcion_unica y cierre) --------------------------------
+// 2026-08-28, reportado por Fernando en Sala del Dinero: un <select> nativo
+// no hace wrap del texto de sus <option> — con frases completas (no "sí"/
+// "no" cortos) el popup queda tan angosto como la caja cerrada y el texto no
+// se alcanza a leer, sin importar cuánto se ensanche el <select> mismo. Con
+// opciones largas se arma un grupo de radios en su lugar: cada opción es su
+// propio bloque, que sí puede partirse en varias líneas — mismo patrón que
+// el picker de equipo (js/auth.js). Válido tanto para opcion_unica como para
+// el bloque de cierre opcional de cualquier tipo.
+function _renderSeleccionUnica(contenedor, enunciado, opciones, idPrefix) {
+  const texto = String(enunciado || '');
+  const opcionesLargas = opciones.some((op) => String(op.texto ?? '').length > 60);
+
+  if (opcionesLargas) {
+    const fs = _mk('fieldset');
+    const legend = _mk('legend', null, texto);
+    fs.appendChild(legend);
+    const nombreGrupo = idPrefix + '-grupo';
+    const radios = [];
+    opciones.forEach((op) => {
+      const fila = _mk('label', { class: 'flex items-start gap-3 p-3 mb-2 border border-audit-border rounded cursor-pointer hover:border-primary' });
+      const radio = _mk('input');
+      radio.type = 'radio';
+      radio.name = nombreGrupo;
+      radio.value = _norm(op.id);
+      radio.style.minWidth = '20px';
+      radio.style.minHeight = '20px';
+      radio.style.marginTop = '2px';
+      radio.style.flexShrink = '0';
+      const spanTexto = _mk('span', null, String(op.texto ?? ''));
+      fila.appendChild(radio);
+      fila.appendChild(spanTexto);
+      fs.appendChild(fila);
+      radios.push(radio);
+    });
+    contenedor.appendChild(fs);
+    // .value delega al radio marcado — serializarRespuesta() lee ref.value
+    // sin saber si es un <select> o este objeto.
+    return { get value() {
+      const marcado = radios.find((r) => r.checked);
+      return marcado ? marcado.value : '';
+    } };
+  }
+
+  const wrap = _mk('div');
+  const label = _mk('label');
+  const selId = idPrefix + '-select';
+  label.setAttribute('for', selId);
+  label.textContent = texto;
+  const sel = _mk('select');
+  sel.id = selId;
+  const ph = _mk('option', { value: '' }, '-- Seleccioná --');
+  sel.appendChild(ph);
+  opciones.forEach((op) => {
+    const o = _mk('option');
+    o.value = _norm(op.id);
+    o.textContent = String(op.texto ?? '');
+    sel.appendChild(o);
+  });
+  wrap.appendChild(label);
+  wrap.appendChild(sel);
+  contenedor.appendChild(wrap);
+  return sel;
+}
+
 // Public: render --------------------------------------------------------
 export function renderInteraccion(contenedor, interaccion) {
   // Nunca lanzar hacia la interfaz (mismo espíritu que §14.5 para api.js): un
@@ -124,20 +206,26 @@ export function renderInteraccion(contenedor, interaccion) {
     if (typeof console !== 'undefined') console.warn('renderInteraccion: contenedor requerido');
     return;
   }
-  _estado.contenedor = contenedor;
-  _estado.interaccion = interaccion || null;
-  _estado.tipo = interaccion?.tipo || null;
-  _estado.refs = {};
+  // Nuevo objeto de estado por cada render — nunca se reutiliza el anterior,
+  // así el de un contenedor viejo no se pisa si alguien todavía lo tiene
+  // guardado (no debería, pero WeakMap + objeto nuevo lo hace imposible por
+  // construcción en vez de por disciplina).
+  const estado = { contenedor, interaccion: interaccion || null, tipo: interaccion?.tipo || null, refs: {} };
+  _porContenedor.set(contenedor, estado);
+  _estado = estado; // último renderizado global — ver comentario arriba
   _clear(contenedor);
 
   if (!interaccion || !interaccion.tipo) return;
 
   switch (interaccion.tipo) {
+    case 'opcion_unica':
+      _renderOpcionUnica(contenedor, interaccion);
+      break;
+    case 'respuesta_corta':
+      _renderRespuestaCorta(contenedor, interaccion);
+      break;
     case 'orden':
       _renderOrden(contenedor, interaccion);
-      break;
-    case 'numero':
-      _renderNumero(contenedor, interaccion);
       break;
     case 'checklist':
       _renderChecklist(contenedor, interaccion);
@@ -149,13 +237,78 @@ export function renderInteraccion(contenedor, interaccion) {
       // tipo desconocido: no renderiza, serializar devolverá {}
       break;
   }
+
+  // Cierre — opcional, válido en cualquier tipo (contrato §1.1).
+  if (interaccion.cierre) _renderCierre(contenedor, interaccion.cierre);
 }
 
-// E1 — orden ------------------------------------------------------------
+// opcion_unica ------------------------------------------------------------
+function _renderOpcionUnica(contenedor, interaccion) {
+  const opciones = Array.isArray(interaccion.opciones) ? interaccion.opciones : [];
+  const ref = _renderSeleccionUnica(contenedor, interaccion.enunciado, opciones, 'opcion-unica');
+  _estado.refs.opcionUnica = ref;
+}
+
+// respuesta_corta -----------------------------------------------------------
+function _renderRespuestaCorta(contenedor, interaccion) {
+  const modoNumero = interaccion.modo === 'numero';
+  const wrap = _mk('div');
+  const label = _mk('label');
+  const inputId = 'respuesta-corta-input';
+  label.setAttribute('for', inputId);
+  label.textContent = String(interaccion.enunciado || '');
+
+  const input = _mk('input');
+  input.id = inputId;
+  input.type = modoNumero ? 'number' : 'text';
+  if (modoNumero) {
+    input.setAttribute('inputmode', 'decimal');
+    if (interaccion.min !== undefined) input.min = String(interaccion.min);
+    if (interaccion.max !== undefined) input.max = String(interaccion.max);
+    if (interaccion.paso !== undefined) input.step = String(interaccion.paso);
+  }
+  if (interaccion.placeholder) input.setAttribute('placeholder', String(interaccion.placeholder));
+
+  wrap.appendChild(label);
+  if (interaccion.sufijo) {
+    const suf = _mk('span', { 'aria-hidden': 'true' }, String(interaccion.sufijo));
+    suf.style.marginLeft = '4px';
+    const row = _mk('div');
+    row.appendChild(input);
+    row.appendChild(suf);
+    wrap.appendChild(row);
+  } else {
+    wrap.appendChild(input);
+  }
+
+  // Descripción de rango para lectores de pantalla (modo numero).
+  if (modoNumero && (interaccion.min !== undefined || interaccion.max !== undefined)) {
+    const descId = inputId + '-ayuda';
+    input.setAttribute('aria-describedby', descId);
+    input.setAttribute('aria-label', `${String(interaccion.enunciado || '')}, de ${interaccion.min ?? '—'} a ${interaccion.max ?? '—'}`);
+    const desc = _mk('span', null, `Rango ${interaccion.min ?? '—'} a ${interaccion.max ?? '—'}`);
+    desc.id = descId;
+    desc.style.display = 'none';
+    wrap.appendChild(desc);
+  }
+
+  contenedor.appendChild(wrap);
+  _estado.refs.respuestaCorta = input;
+}
+
+// Cierre opcional ---------------------------------------------------------
+function _renderCierre(contenedor, cierre) {
+  const opciones = Array.isArray(cierre.opciones) ? cierre.opciones : [];
+  const zona = _mk('div');
+  zona.className = 'cierre-zona';
+  contenedor.appendChild(zona);
+  const ref = _renderSeleccionUnica(zona, cierre.enunciado, opciones, 'cierre');
+  _estado.refs.cierre = ref;
+}
+
+// orden -------------------------------------------------------------------
 function _renderOrden(contenedor, interaccion) {
   const items = Array.isArray(interaccion.items) ? interaccion.items : [];
-  const pregunta = interaccion.pregunta || '';
-  const opciones = Array.isArray(interaccion.opciones) ? interaccion.opciones : [];
 
   const zona = _mk('div');
   zona.className = 'orden-zona';
@@ -266,7 +419,9 @@ function _renderOrden(contenedor, interaccion) {
   // Barajado determinista a propósito (hash del id, nunca Math.random): todos
   // los equipos ven el mismo tablero, así la dificultad es la misma para todos
   // y el docente puede reproducir lo que ve un equipo que pide ayuda.
-  const barajados = _ordenBarajar(items);
+  // `barajar` sale del dato editable (interaccion.barajar) — antes se decidía
+  // por número de sala, ver plan-motor-misiones.md §1.
+  const barajados = interaccion.barajar ? _ordenBarajar(items) : items;
 
   barajados.forEach((it) => {
     const t = _mk('div');
@@ -319,209 +474,16 @@ function _renderOrden(contenedor, interaccion) {
   contenedor.appendChild(zona);
   _ordenSincronizar(casillas, bandeja, live);
 
-  // Pregunta + select eslabón
-  if (pregunta || opciones.length) {
-    const field = _mk('div');
-    field.className = 'orden-pregunta';
-    const label = _mk('label');
-    label.setAttribute('for', 'orden-eslabon');
-    label.textContent = pregunta || '¿En qué eslabón se concentra el menor valor y mayor costo?';
-    const sel = _mk('select');
-    sel.id = 'orden-eslabon';
-    const ph = _mk('option', { value: '' }, '-- Seleccioná --');
-    ph.value = '';
-    sel.appendChild(ph);
-    opciones.forEach((op) => {
-      const o = _mk('option');
-      o.value = _norm(op.id);
-      o.textContent = String(op.texto ?? '');
-      sel.appendChild(o);
-    });
-    field.appendChild(label);
-    field.appendChild(sel);
-    contenedor.appendChild(field);
-    _estado.refs.eslabon = sel;
-  }
-
   _estado.refs.ordenCasillas = casillas;
   _estado.refs.ordenLista = rejilla;
   _estado.refs.ordenLive = live;
 }
 
-// E2/E3 — numero --------------------------------------------------------
-function _renderNumero(contenedor, interaccion) {
-  const campos = Array.isArray(interaccion.campos) ? interaccion.campos : [];
-  const pregunta = interaccion.pregunta || '';
-  const opciones = Array.isArray(interaccion.opciones) ? interaccion.opciones : [];
-
-  // Campos numéricos: aquellos con min/max/paso definidos o id porcentaje
-  campos.forEach((c) => {
-    const hasNumeric = c.min !== undefined || c.max !== undefined || c.paso !== undefined || c.id === 'porcentaje';
-    // Si el campo es enganosa sin min/max es en realidad el select, no un input number
-    if (!hasNumeric) return;
-    const wrap = _mk('div');
-    const label = _mk('label');
-    const inputId = 'campo-' + _norm(c.id);
-    label.setAttribute('for', inputId);
-    label.textContent = String(c.etiqueta ?? c.id);
-
-    const input = _mk('input');
-    input.type = 'number';
-    input.id = inputId;
-    input.setAttribute('inputmode', 'decimal');
-    if (c.min !== undefined) input.min = String(c.min);
-    if (c.max !== undefined) input.max = String(c.max);
-    if (c.paso !== undefined) input.step = String(c.paso);
-    // aria
-    input.setAttribute('aria-describedby', inputId + '-ayuda');
-    // ayuda con rango
-    const ayuda = _mk('span');
-    ayuda.id = inputId + '-ayuda';
-    ayuda.style.fontSize = '0.85em';
-    if (c.sufijo) {
-      const suf = _mk('span');
-      suf.setAttribute('aria-hidden', 'true');
-      suf.textContent = String(c.sufijo);
-      suf.style.marginLeft = '4px';
-      wrap.appendChild(label);
-      const row = _mk('div');
-      row.appendChild(input);
-      row.appendChild(suf);
-      wrap.appendChild(row);
-    } else {
-      wrap.appendChild(label);
-      wrap.appendChild(input);
-    }
-    if (!wrap.contains(ayuda) && c.sufijo) {
-      // no ayuda extra si no hay
-    }
-    // Descripción de rango para AT
-    if (c.min !== undefined || c.max !== undefined) {
-      const desc = _mk('span');
-      desc.id = inputId + '-ayuda';
-      desc.textContent = `Rango ${c.min ?? '—'} a ${c.max ?? '—'}`;
-      desc.style.display = 'none';
-      // usar aria-label como respaldo
-      input.setAttribute('aria-label', `${String(c.etiqueta ?? c.id)}, de ${c.min ?? '—'} a ${c.max ?? '—'}`);
-      wrap.appendChild(desc);
-    }
-    contenedor.appendChild(wrap);
-    // guardar ref por id normalizado
-    _estado.refs[_norm(c.id)] = input;
-    // alias porcentaje
-    if (_norm(c.id) === 'porcentaje') _estado.refs.porcentaje = input;
-  });
-
-  // Select para pregunta/opciones (enganosa / inconsistencia)
-  if (opciones.length) {
-    // Determinar clave: siCampos contiene enganosa -> enganosa, si contiene inconsistencia -> inconsistencia
-    // si no, inferir por opciones: si/no -> enganosa, a/b/c -> inconsistencia
-    let clave = null;
-    const campoIds = campos.map((c) => _norm(c.id));
-    if (campoIds.includes('enganosa')) clave = 'enganosa';
-    else if (campoIds.includes('inconsistencia')) clave = 'inconsistencia';
-    else {
-      const optIds = opciones.map((o) => _norm(o.id));
-      if (optIds.includes('si') || optIds.includes('no')) clave = 'enganosa';
-      else if (optIds.includes('a') || optIds.includes('b') || optIds.includes('c')) clave = 'inconsistencia';
-      else clave = 'opcion';
-    }
-
-    const preguntaTexto = String(pregunta || 'Seleccioná una opción');
-    // 2026-08-28, reportado por Fernando en Sala del Dinero: un <select>
-    // nativo no hace wrap del texto de sus <option> — con frases completas
-    // (no "sí"/"no" cortos) el popup queda tan angosto como la caja cerrada
-    // y el texto no se alcanza a leer, sin importar cuánto se ensanche el
-    // <select> mismo. Con opciones largas se arma un grupo de radios en su
-    // lugar: cada opción es su propio bloque, que sí puede partirse en
-    // varias líneas — mismo patrón que el picker de equipo (js/auth.js).
-    const opcionesLargas = opciones.some((op) => String(op.texto ?? '').length > 60);
-
-    if (opcionesLargas) {
-      const fs = _mk('fieldset');
-      const legend = _mk('legend');
-      legend.textContent = preguntaTexto;
-      fs.appendChild(legend);
-      const nombreGrupo = 'grupo-' + clave;
-      const radios = [];
-      opciones.forEach((op) => {
-        const fila = _mk('label', { class: 'flex items-start gap-3 p-3 mb-2 border border-audit-border rounded cursor-pointer hover:border-primary' });
-        const radio = _mk('input');
-        radio.type = 'radio';
-        radio.name = nombreGrupo;
-        radio.value = _norm(op.id);
-        radio.style.minWidth = '20px';
-        radio.style.minHeight = '20px';
-        radio.style.marginTop = '2px';
-        radio.style.flexShrink = '0';
-        const texto = _mk('span', null, String(op.texto ?? ''));
-        fila.appendChild(radio);
-        fila.appendChild(texto);
-        fs.appendChild(fila);
-        radios.push(radio);
-      });
-      contenedor.appendChild(fs);
-      // .value delega al radio marcado — serializarRespuesta() más abajo lee
-      // sel.value sin saber si es un <select> o este objeto; no hace falta
-      // tocar esa lógica.
-      const refValor = { get value() {
-        const marcado = radios.find((r) => r.checked);
-        return marcado ? marcado.value : '';
-      } };
-      _estado.refs[clave] = refValor;
-      _estado.refs.juicio = refValor;
-      _estado.refs._numeroClave = clave;
-    } else {
-      const wrap = _mk('div');
-      const label = _mk('label');
-      const selId = 'campo-' + clave;
-      label.setAttribute('for', selId);
-      label.textContent = preguntaTexto;
-
-      const sel = _mk('select');
-      sel.id = selId;
-      const ph = _mk('option', { value: '' }, '-- Seleccioná --');
-      sel.appendChild(ph);
-      opciones.forEach((op) => {
-        const o = _mk('option');
-        o.value = _norm(op.id);
-        o.textContent = String(op.texto ?? '');
-        sel.appendChild(o);
-      });
-      wrap.appendChild(label);
-      wrap.appendChild(sel);
-      contenedor.appendChild(wrap);
-      _estado.refs[clave] = sel;
-      _estado.refs.juicio = sel;
-      _estado.refs._numeroClave = clave;
-    }
-  }
-
-  // ── Dataviz §16.2 — SVG inline accesible (inyectado al inicio del contenedor)
-  // E2: 87% verde /13% resto con rango 85-90 · E3: US$4.00 apilada 0.175 ínfimo
-  try {
-    // Inferir estación: enganosa → E2, inconsistencia → E3; fallback por clave
-    const clave = _estado.refs._numeroClave;
-    let viz = null;
-    if (clave === 'enganosa') viz = crearGraficoE2();
-    else if (clave === 'inconsistencia') viz = crearGraficoE3();
-    else {
-      const optIds = opciones.map((o) => _norm(o.id));
-      if (optIds.includes('si') || optIds.includes('no')) viz = crearGraficoE2();
-      else if (optIds.includes('a') || optIds.includes('b') || optIds.includes('c')) viz = crearGraficoE3();
-    }
-    if (viz) contenedor.prepend(viz);
-  } catch (_e) {
-    // nunca romper render por dataviz
-  }
-}
-
-// E4 — checklist --------------------------------------------------------
+// checklist -----------------------------------------------------------------
 function _renderChecklist(contenedor, interaccion) {
   const items = Array.isArray(interaccion.items) ? interaccion.items : [];
   const fs = _mk('fieldset');
-  const legend = _mk('legend');
-  legend.textContent = 'Seleccioná los actores en riesgo directo según el expediente';
+  const legend = _mk('legend', null, interaccion.enunciado || 'Seleccioná las opciones correspondientes');
   fs.appendChild(legend);
 
   const refs = [];
@@ -555,14 +517,13 @@ function _renderChecklist(contenedor, interaccion) {
   _estado.refs.fieldset = fs;
 }
 
-// E5 — clasificacion ----------------------------------------------------
+// clasificacion ---------------------------------------------------------------
 function _renderClasificacion(contenedor, interaccion) {
   const items = Array.isArray(interaccion.items) ? interaccion.items : [];
   const categorias = Array.isArray(interaccion.categorias) ? interaccion.categorias : [];
 
   const fs = _mk('fieldset');
-  const legend = _mk('legend');
-  legend.textContent = 'Clasificá cada frase del borrador de CGC';
+  const legend = _mk('legend', null, interaccion.enunciado || 'Clasificá cada elemento');
   fs.appendChild(legend);
 
   const refs = [];
@@ -600,90 +561,81 @@ function _renderClasificacion(contenedor, interaccion) {
 }
 
 // Serialización ---------------------------------------------------------
-export function serializarRespuesta() {
-  const t = _estado.tipo;
-  const inter = _estado.interaccion;
-  if (!t) return {};
+// Forma canónica {valor, cierre?} — contrato §1.2/§1.3. Clave ausente si no
+// hay respuesta aun, nunca un valor vacío/[] — así el servidor responde
+// 'vacio' y no compara contra una respuesta a medio dar.
+// `contenedor` es opcional: sin él, lee el último renderInteraccion() global
+// (lo que ya usaba js/juego.js, donde solo hay un widget vivo a la vez, sin
+// ambigüedad). Con un contenedor, lee el estado de ESE widget puntual, sin
+// importar qué se haya renderizado después en cualquier otra parte de la
+// página — es lo que necesita el editor del docente, que puede tener dos
+// widgets vivos a la vez ("marcar respuesta" y "probar sala").
+export function serializarRespuesta(contenedor) {
+  const estado = contenedor ? (_porContenedor.get(contenedor) || { tipo: null, interaccion: null, refs: {} }) : _estado;
+  const t = estado.tipo;
+  const inter = estado.interaccion;
+  const out = {};
 
-  switch (t) {
-    case 'orden': {
-      // Las casillas son la fuente de verdad del orden: se leen por indice.
-      // Antes esto buscaba li[data-id], que era la forma de la lista con
-      // botones arriba/abajo. En el tablero de casillas el data-id vive en la
-      // tarjeta anidada, no en el <li>, asi que devolvia [] siempre y la
-      // estacion quedaba imposible de resolver por mas bien colocada que
-      // estuviera. Se encontro probando en navegador, no leyendo el codigo.
-      const casillas = _estado.refs.ordenCasillas || [];
-      const sel = _estado.refs.eslabon;
-      const orden = casillas
-        .map((c) => _ordenTarjetaEnCasilla(c))
-        .filter(Boolean)
-        .map((t) => _norm(t.dataset.id));
-      const eslabon = sel ? _norm(sel.value) : '';
-      // Sin ninguna tarjeta colocada se omite la clave para que el servidor
-      // responda detalle 'vacio' (§12). Enviar [] lo haria comparar el arreglo
-      // y contestar 'orden-mal', que no es lo que pasa: no hay respuesta aun.
-      return orden.length ? { orden, eslabon } : { eslabon };
-    }
-    case 'numero': {
-      const out = {};
-      // porcentaje numérico: enviar como número si hay valor, si no string vacío para que servidor detecte vacio
-      const inp = _estado.refs.porcentaje || _estado.refs['porcentaje'] || null;
-      if (inp) {
-        const raw = String(inp.value ?? '').trim();
-        if (raw === '') {
-          // dejar clave ausente o vacía no importa; usamos null para que _cc_num -> null
-          // pero enviamos "" para ser explícito con vacio
-          out.porcentaje = '';
-        } else {
-          const n = _parseNumero(raw);
-          out.porcentaje = n !== null ? n : _norm(raw);
-        }
+  if (t) {
+    switch (t) {
+      case 'opcion_unica': {
+        const ref = estado.refs.opcionUnica;
+        const v = ref ? _norm(ref.value) : '';
+        if (v) out.valor = v;
+        break;
       }
-      // juicio: enganosa o inconsistencia
-      const clave = _estado.refs._numeroClave || null;
-      const sel = clave ? _estado.refs[clave] : _estado.refs.juicio;
-      if (sel) {
-        const v = _norm(sel.value);
-        if (clave === 'enganosa' || (!clave && (v === 'si' || v === 'no' || v === ''))) {
-          out.enganosa = v;
-          // si el contrato espera inconsistencia pero el usuario está en E2, no enviar inconsistencia
-          // Si clave era enganosa, no enviar inconsistencia
-        } else if (clave === 'inconsistencia' || (!clave && (v === 'a' || v === 'b' || v === 'c' || v === ''))) {
-          out.inconsistencia = v;
-        } else if (clave) {
-          out[clave] = v;
-        } else {
-          // fallback genérico: si no sabemos clave, inferir
-          if (inter && Array.isArray(inter.opciones)) {
-            const ids = inter.opciones.map((o) => _norm(o.id));
-            if (ids.includes('si')) out.enganosa = v;
-            else if (ids.includes('a')) out.inconsistencia = v;
-            else out.opcion = v;
+      case 'respuesta_corta': {
+        const input = estado.refs.respuestaCorta;
+        const raw = input ? String(input.value ?? '').trim() : '';
+        if (raw !== '') {
+          if (inter && inter.modo === 'numero') {
+            const n = _parseNumero(raw);
+            if (n !== null) out.valor = n;
           } else {
-            out.valor = v;
+            out.valor = _norm(raw);
           }
         }
-      } else {
-        // No hay clave inferida: revisar ambas refs por si existen
-        if (_estado.refs.enganosa) out.enganosa = _norm(_estado.refs.enganosa.value);
-        if (_estado.refs.inconsistencia) out.inconsistencia = _norm(_estado.refs.inconsistencia.value);
+        break;
       }
-      return out;
+      case 'orden': {
+        // Las casillas son la fuente de verdad del orden: se leen por indice.
+        const casillas = estado.refs.ordenCasillas || [];
+        const orden = casillas
+          .map((c) => _ordenTarjetaEnCasilla(c))
+          .filter(Boolean)
+          .map((t) => _norm(t.dataset.id));
+        if (orden.length) out.valor = orden;
+        break;
+      }
+      case 'checklist': {
+        const cbs = estado.refs.checklist || [];
+        const marcados = cbs.filter((cb) => cb.checked).map((cb) => _norm(cb.value));
+        if (marcados.length) out.valor = marcados;
+        break;
+      }
+      case 'clasificacion': {
+        const sels = estado.refs.clasificacion || [];
+        const mapa = {};
+        let algo = false;
+        sels.forEach((s) => {
+          const v = _norm(s.value);
+          if (v) { mapa[s.dataset.frase] = v; algo = true; }
+        });
+        if (algo) out.valor = mapa;
+        break;
+      }
+      default:
+        break;
     }
-    case 'checklist': {
-      const cbs = _estado.refs.checklist || [];
-      const actores = cbs.filter((cb) => cb.checked).map((cb) => _norm(cb.value));
-      return { actores };
-    }
-    case 'clasificacion': {
-      const sels = _estado.refs.clasificacion || [];
-      const frases = sels.map((s) => _norm(s.value));
-      return { frases };
-    }
-    default:
-      return {};
   }
+
+  const cierreRef = estado.refs.cierre;
+  if (cierreRef) {
+    const v = _norm(cierreRef.value);
+    if (v) out.cierre = v;
+  }
+
+  return out;
 }
 
 // Helpers de test / reset (no afectan contrato) ------------------------

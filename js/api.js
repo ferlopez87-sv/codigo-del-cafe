@@ -102,7 +102,13 @@ export const Docente = {
   async todosLosEquipos() { return peticion('/api/docente/todo-equipos', { method: 'GET' }); },
   async crearSesion(d) {
     if (!d?.nombre || !String(d.nombre).trim()) return { datos: null, error: { mensaje: 'El nombre de la sesión es obligatorio.', codigo: 'parametros_faltantes', estado: 400 } };
-    return peticion('/api/docente/sesiones', { method: 'POST', body: { nombre: String(d.nombre).trim(), duracion_minutos: d.duracion_minutos != null ? Number(d.duracion_minutos) : 50 } });
+    const body = { nombre: String(d.nombre).trim(), duracion_minutos: d.duracion_minutos != null ? Number(d.duracion_minutos) : 50 };
+    // P5 — opcional: srv autodetecta la misión SOLO si hay exactamente una
+    // publicada (plan-motor-misiones.md P1). En cuanto exista más de una,
+    // hace falta mandarla explícita o el servidor responde 400
+    // parametros_faltantes — de ahí el <select> de misión en #sec-sesiones.
+    if (d.mision_id) body.mision_id = d.mision_id;
+    return peticion('/api/docente/sesiones', { method: 'POST', body });
   },
   async abrirSesion(id) {
     if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
@@ -160,6 +166,10 @@ export const Docente = {
     if (!sesionId) return { datos: null, error: { mensaje: 'Falta sesionId.', codigo: 'parametros_faltantes', estado: 400 } };
     return peticion(`/api/docente/desempeno/${encodeURIComponent(sesionId)}`, { method: 'GET' });
   },
+  async calificacion(equipoId) {
+    if (!equipoId) return { datos: null, error: { mensaje: 'Falta equipoId.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/calificaciones/${encodeURIComponent(equipoId)}`, { method: 'GET' });
+  },
   async guardarCalificacion(equipoId, rubrica) {
     if (!equipoId) return { datos: null, error: { mensaje: 'Falta equipoId.', codigo: 'parametros_faltantes', estado: 400 } };
     return peticion(`/api/docente/calificaciones/${encodeURIComponent(equipoId)}`, { method: 'POST', body: rubrica || {} });
@@ -168,11 +178,64 @@ export const Docente = {
     if (!sesionId) return { datos: null, error: { mensaje: 'Falta sesionId.', codigo: 'parametros_faltantes', estado: 400 } };
     return peticion(`/api/docente/anonimizar/${encodeURIComponent(sesionId)}`, { method: 'POST', body: {} });
   },
-  // Editor de contenido de salas (2026-09-02) — solo fglopez; RLS +
-  // gate por correo en srv/rutas/docente.js son la autoridad real.
-  async estaciones() { return peticion('/api/docente/estaciones', { method: 'GET' }); },
+  async armarEquipos(sesionId, { modo, valor, prefijoNombre } = {}) {
+    if (!sesionId) return { datos: null, error: { mensaje: 'Falta sesionId.', codigo: 'parametros_faltantes', estado: 400 } };
+    if (!modo || !['por_tamano','por_cantidad'].includes(modo)) return { datos: null, error: { mensaje: 'Modo inválido.', codigo: 'parametros_faltantes', estado: 400 } };
+    if (!valor || Number(valor) < 1) return { datos: null, error: { mensaje: 'Valor inválido.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/sesiones/${encodeURIComponent(sesionId)}/armar-equipos`, { method: 'POST', body: { modo, valor: Number(valor), prefijoNombre: prefijoNombre ? String(prefijoNombre).trim() : undefined } });
+  }
+};
+
+// Editor de misiones (P5, plan-motor-misiones.md) — reemplaza el editor de
+// 2026-09-02 de una sola misión fija. Todas las rutas están detrás de
+// super-admin del lado del servidor (srv/rutas/contenido.js); acá solo se
+// arman los wrappers, mismo formato {datos,error} que el resto de api.js.
+export const Contenido = {
+  async misiones() { return peticion('/api/docente/contenido/misiones', { method: 'GET' }); },
+  async crearMision({ slug, titulo, subtitulo, intro, codigo_maestro, veredicto }) {
+    if (!slug || !titulo || !veredicto) return { datos: null, error: { mensaje: 'Slug, título y veredicto son obligatorios.', codigo: 'dato_invalido', estado: 400 } };
+    return peticion('/api/docente/contenido/misiones', { method: 'POST', body: { slug, titulo, subtitulo, intro, codigo_maestro, veredicto } });
+  },
+  async actualizarMision(id, payload) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(id)}`, { method: 'PUT', body: payload || {} });
+  },
+  async borrarMision(id) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  async duplicarMision(id) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(id)}/duplicar`, { method: 'POST', body: {} });
+  },
+  async publicarMision(id) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(id)}/publicar`, { method: 'POST', body: {} });
+  },
+  async estaciones(misionId) {
+    if (!misionId) return { datos: null, error: { mensaje: 'Falta misionId.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(misionId)}/estaciones`, { method: 'GET' });
+  },
+  async crearEstacion(misionId, payload) {
+    if (!misionId) return { datos: null, error: { mensaje: 'Falta misionId.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(misionId)}/estaciones`, { method: 'POST', body: payload || {} });
+  },
+  async reordenarEstaciones(misionId, ordenIds) {
+    if (!misionId) return { datos: null, error: { mensaje: 'Falta misionId.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/misiones/${encodeURIComponent(misionId)}/reordenar`, { method: 'POST', body: { orden: ordenIds || [] } });
+  },
   async actualizarEstacion(id, payload) {
     if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
-    return peticion(`/api/docente/estaciones/${encodeURIComponent(id)}`, { method: 'PUT', body: payload || {} });
+    return peticion(`/api/docente/contenido/estaciones/${encodeURIComponent(id)}`, { method: 'PUT', body: payload || {} });
+  },
+  async borrarEstacion(id) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/estaciones/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  // No escribe en intentos/progreso (srv/rutas/contenido.js) — sirve para el
+  // botón "Probar sala" sin ensuciar la partida de ningún equipo real.
+  async probarEstacion(id, respuesta) {
+    if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };
+    return peticion(`/api/docente/contenido/estaciones/${encodeURIComponent(id)}/probar`, { method: 'POST', body: { respuesta: respuesta || {} } });
   }
 };

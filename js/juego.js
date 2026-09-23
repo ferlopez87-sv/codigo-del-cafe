@@ -11,8 +11,8 @@
 
 import { Auth, Juego } from './api.js';
 import { renderInteraccion, serializarRespuesta } from './render.js';
+import { crearGrafico } from './dataviz.js';
 import { sincronizarDesdeEstado, onTiempoAgotado } from './timer.js';
-import { ESTACIONES_UI } from './contenido.js';
 import {
   humanizarClave,
   pintarConNegritas,
@@ -111,6 +111,7 @@ async function obtenerEstacionesPublicas() {
     const error = respuesta && 'error' in respuesta ? respuesta.error : null;
     if (error || !Array.isArray(datos)) return null;
     estacionesCache = datos;
+    crearTarjetasSidebar(estacionesCache);
     return estacionesCache;
   })();
 
@@ -119,29 +120,16 @@ async function obtenerEstacionesPublicas() {
   return resultado;
 }
 
-// Fisher-Yates — usado solo para el orden inicial de E1 (contenido.js: ordenInicialAleatorio)
-function barajar(items) {
-  const copia = items.slice();
-  for (let i = copia.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copia[i], copia[j]] = [copia[j], copia[i]];
-  }
-  return copia;
-}
-
-// El servidor entrega interaccion.items de E1 en el orden correcto (es también la
-// respuesta esperada) — ESTACIONES_UI[1].ordenInicialAleatorio pide barajar del lado
-// cliente antes de pintar, para no regalar la solución por el orden de aparición.
-function prepararInteraccion(estacion) {
-  const interaccion = estacion && estacion.interaccion;
-  if (!interaccion || typeof interaccion !== 'object') return interaccion;
-  const id = Number(estacion.id);
-  const ui = ESTACIONES_UI[id];
-  if (id === 1 && ui && ui.ordenInicialAleatorio && Array.isArray(interaccion.items)) {
-    return { ...interaccion, items: barajar(interaccion.items) };
-  }
-  return interaccion;
-}
+// El barajado de interaccion.items (interaccion.barajar, §1.1) ya lo resuelve
+// js/render.js#_renderOrden con un hash determinista del id — nunca Math.random,
+// justamente para que todos los equipos vean el mismo tablero y el docente
+// pueda reproducir lo que ve un equipo que pide ayuda. Antes de borrar
+// contenido.js este módulo tenía un SEGUNDO barajado acá (Fisher-Yates con
+// Math.random, cableado a ESTACIONES_UI[1]) que corría antes de pasarle el
+// item a render.js: el resultado final no rompía nada visiblemente, pero
+// destruía esa garantía — cada carga de página mezclaba el orden de entrada
+// del hash determinista, así que dos equipos (o el docente reproduciendo)
+// ya no veían el mismo tablero. Se retira: render.js es el único que baraja.
 
 // ---------------------------------------------------------------------------
 // Pintado del contenido real de la estación dentro de #panel-estacion (§7.2, §11, §14.4)
@@ -196,9 +184,19 @@ async function pintarEstacionEnPanel(id) {
     if (intentosEl) intentosEl.textContent = '';
   }
 
+  // El gráfico ya no lo inyecta render.js (P2, plan-motor-misiones.md §1.6) —
+  // el orquestador lo llama acá, explícito, con estacion.visual. `null` ⇒
+  // sin gráfico, mismo contrato que cuando no había ninguno.
+  const visualEl = $('estacion-visual');
+  if (visualEl) {
+    while (visualEl.firstChild) visualEl.removeChild(visualEl.firstChild);
+    const grafico = estacion.visual ? crearGrafico(estacion.visual) : null;
+    if (grafico) visualEl.appendChild(grafico);
+  }
+
   const interaccionEl = $('estacion-interaccion');
   if (interaccionEl) {
-    renderInteraccion(interaccionEl, prepararInteraccion(estacion));
+    renderInteraccion(interaccionEl, estacion && estacion.interaccion);
     if(!soyApuntador){
       interaccionEl.querySelectorAll('input,select,button,textarea').forEach(el=>{ el.disabled = true; });
       // El tablero de E1 son <div>/<li>, no controles de formulario: `disabled`
@@ -286,6 +284,13 @@ export async function initJuego() {
   equipoActual = equipo;
   sesionActual = datos.sesion || null;
 
+  // mi_equipo() (security definer) es quien expone el nombre de la misión —
+  // `misiones` es deny-all por RLS a propósito, para no filtrar codigo_maestro
+  // ni veredicto por una política abierta. El payload trae además `intro`,
+  // pero esa es la copia de PORTADA (index.html) — que Fernando dejó
+  // genérica a propósito — nunca se pinta acá.
+  pintarNombreMision(datos.mision);
+
   // Se enlaza ANTES de pintar/cargar estado: cargarEstado() más abajo puede
   // sincronizar cl-timer por primera vez, y si el tiempo ya estaba agotado al
   // entrar, onTiempoAgotado() debe estar registrado para que _dispararTiempoAgotado()
@@ -293,6 +298,14 @@ export async function initJuego() {
   enlazarEventosUnaVez();
 
   ocultarSinEquipo();
+
+  // Las tarjetas de la barra lateral se clonan de <template id="tpl-nav-sala">
+  // (juego.html) a partir del contenido real de la misión — tienen que existir
+  // ANTES del primer pintarEstadoDesdeDatos() de abajo, si no pintarTarjetas()
+  // no encuentra ningún .estacion-card[data-estacion] para actualizar y la
+  // barra lateral queda vacía hasta el primer click.
+  await obtenerEstacionesPublicas();
+
   // §7: sala de espera si aún no arranca el reloj (iniciado_en null)
   const iniciado = equipo?.iniciado_en || datos.iniciado_en || datos.equipo?.iniciado_en;
   if(!iniciado){
@@ -439,8 +452,11 @@ function mensajeErrorServidor(codigo) {
     case 'no_autorizado': return 'No estás autorizado para ver este equipo.';
     case 'sesion_cerrada': return 'La sesión ya fue cerrada por el docente.';
     case 'sesion_no_abierta': return 'Tu docente todavía no abrió la sesión. Avisale y volvé a intentar — no hace falta recargar.';
+    case 'sin_mision': return 'Esta sesión todavía no tiene una misión asignada. Avisale a tu docente.';
     case 'tiempo_agotado': return 'Se agotó el tiempo de la sesión.';
-    case 'bloqueada': return 'Esta estación sigue bloqueada. Resolvé las cuatro anteriores primero.';
+    // Sin número fijo: con desbloqueo "secuencial" es la anterior, con "tras_todas"
+    // son todas — y la cantidad de estaciones ya no es siempre 4 (§1.5).
+    case 'bloqueada': return 'Esta estación sigue bloqueada. Resolvé las estaciones anteriores primero.';
     case 'estacion_invalida': return 'Estación no válida.';
     case 'no_apuntador': return 'Solo la persona apuntadora del equipo puede enviar respuestas. Pedile que la mande ella.';
     case 'sin_apuntador': return 'Tu equipo todavía no tiene apuntador/a — pedile al docente que marque uno en el panel.';
@@ -515,6 +531,16 @@ function pintarUsuarioActual(){
   el.textContent = soyApuntador ? `${base} ★ apuntador/a` : base;
 }
 
+// `mision` puede venir null (sesión de clase sin misión asignada todavía —
+// configuración pendiente del docente, no error del estudiante): texto
+// neutro en vez de dejar el "—"/vacío del HTML original o un error.
+function pintarNombreMision(mision){
+  const titulo = (mision && mision.titulo) || 'Escape room de auditoría';
+  const el = $('nombre-mision');
+  if (el) el.textContent = titulo;
+  document.title = `${titulo} — Juego`;
+}
+
 let soyApuntador = true;
 let nombreApuntador = '';
 function aplicarModoApuntador(soy, nombre){
@@ -547,7 +573,10 @@ function pintarEstadoDesdeDatos(datos) {
   ultimoEstadoJuego = datos;
 
   pintarTarjetas(estaciones);
-  pintarBarraProgreso(resueltas, 5);
+  // `estaciones` ya es la lista real de la misión de este equipo (§1.1): el
+  // total de la barra sale de ahí, no de un literal fijo — dos misiones con
+  // distinta cantidad de salas conviven (§4 verificación integral).
+  pintarBarraProgreso(resueltas, estaciones.length || TOTAL_ESTACIONES);
   pintarFragmentos(estaciones);
   // Apuntador §4.1 §11
   if('soy_apuntador' in datos || 'soyApuntador' in datos){
@@ -581,6 +610,68 @@ function pintarEstadoDesdeDatos(datos) {
   if (typeof datos.segundos_restantes === 'number' || datos.tiempo_agotado) {
     sincronizarDesdeEstado(datos);
   }
+}
+
+// Clona <template id="tpl-nav-sala"> (juego.html) una vez por estación real de
+// la misión — reemplaza los 5 <button> escritos a mano que solo servían para
+// el caso CGC (plan-motor-misiones.md §1, P3). Se llama desde
+// obtenerEstacionesPublicas() apenas resuelve, así que ya existe una tarjeta
+// por sala antes de que pintarTarjetas() pinte su estado real.
+let tarjetasSidebarCreadas = false;
+function crearTarjetasSidebar(estaciones) {
+  if (tarjetasSidebarCreadas) return;
+  const nav = $('nav-salas');
+  const tpl = document.getElementById('tpl-nav-sala');
+  if (!nav || !tpl || !Array.isArray(estaciones) || !estaciones.length) return;
+
+  const ordenadas = estaciones.slice().sort((a, b) => {
+    const oa = a.orden ?? a.id ?? 0;
+    const ob = b.orden ?? b.id ?? 0;
+    return oa - ob;
+  });
+
+  ordenadas.forEach((est, i) => {
+    const frag = tpl.content.cloneNode(true);
+    const btn = frag.querySelector('.estacion-card');
+    if (!btn) return;
+    btn.dataset.estacion = String(est.id);
+    const estadoId = `estado-estacion-${est.id}`;
+    btn.setAttribute('aria-describedby', estadoId);
+
+    const icono = btn.querySelector('[data-rol="icono"]');
+    if (icono) icono.textContent = est.icono || 'help';
+
+    const orden = btn.querySelector('[data-rol="orden"]');
+    if (orden) orden.textContent = `Sala ${est.orden ?? i + 1}`;
+
+    const titulo = btn.querySelector('[data-rol="titulo"]');
+    if (titulo) titulo.textContent = est.titulo || `Estación ${est.id}`;
+
+    const estado = btn.querySelector('[data-rol="estado"]');
+    if (estado) estado.id = estadoId;
+
+    nav.appendChild(frag);
+  });
+
+  pintarAvisoDesbloqueoFinal(ordenadas);
+
+  tarjetasSidebarCreadas = true;
+}
+
+// Antes decía, fijo en el HTML, "La Sala 5 se desbloquea al resolver las
+// cuatro primeras" — cierto solo para CGC. `desbloqueo: tras_todas` (§1.5)
+// puede caer en cualquier sala, con cualquier cantidad de anteriores, así
+// que el aviso sale del dato real en vez de estar escrito a mano.
+function pintarAvisoDesbloqueoFinal(estacionesOrdenadas) {
+  const el = $('aviso-desbloqueo-final');
+  if (!el) return;
+  const final = estacionesOrdenadas.find((e) => e.desbloqueo === 'tras_todas');
+  if (!final) {
+    setHidden(el, true);
+    return;
+  }
+  el.textContent = `La Sala ${final.orden ?? '—'} se desbloquea al resolver las demás.`;
+  setHidden(el, false);
 }
 
 function pintarTarjetas(estaciones) {
@@ -659,11 +750,15 @@ function pintarFragmentos(estaciones) {
   // Limpiar de forma segura. Se reconstruye con textContent.
   while (cont.firstChild) cont.removeChild(cont.firstChild);
 
-  // Ordenar por id para que el código maestro tenga orden estable
-  const ordenadas = [...estaciones].sort((a, b) => (a.estacion_id ?? a.id) - (b.estacion_id ?? b.id));
+  // Orden estable = el mismo que compone el código maestro del lado del
+  // servidor (string_agg(...) order by orden, plan-motor-misiones.md §0.1) —
+  // nunca por `id`: una misión creada desde el editor tiene ids sin
+  // correlativo (arrancan en 6, sql/01-esquema.sql), así que ordenar por id
+  // mezclaría los fragmentos.
+  const ordenadas = [...estaciones].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 
-  ordenadas.forEach((est) => {
-    const id = est.estacion_id ?? est.id;
+  ordenadas.forEach((est, i) => {
+    const numeroVisible = est.orden ?? i + 1;
     const item = document.createElement('li');
     item.setAttribute('role', 'listitem');
     // codigo solo viaja si la estación está resuelta (§4.2 estado_juego)
@@ -671,11 +766,11 @@ function pintarFragmentos(estaciones) {
     const estado = est.estado;
     if (codigo && estado === 'resuelta') {
       item.textContent = String(codigo);
-      item.setAttribute('aria-label', `Fragmento ${id}, ${codigo} obtenido`);
+      item.setAttribute('aria-label', `Fragmento ${numeroVisible}, ${codigo} obtenido`);
       item.dataset.obtenido = 'true';
     } else {
       item.textContent = '—';
-      item.setAttribute('aria-label', `Fragmento ${id} aún no obtenido`);
+      item.setAttribute('aria-label', `Fragmento ${numeroVisible} aún no obtenido`);
       item.dataset.obtenido = 'false';
     }
     cont.appendChild(item);
@@ -690,7 +785,10 @@ function pintarFragmentos(estaciones) {
 // ---------------------------------------------------------------------------
 export async function seleccionarSala(estacionId) {
   const id = Number(estacionId);
-  if (!Number.isInteger(id) || id < 1 || id > 5) return;
+  // `estaciones.id` tiene secuencia propia (plan-motor-misiones.md §0, P0):
+  // una misión nueva puede tener salas con id > 5, así que solo se valida
+  // que sea un entero positivo, no un techo fijo de 5.
+  if (!Number.isInteger(id) || id < 1) return;
 
   // Bloqueada no se selecciona — el servidor es la autoridad, pero evitamos el viaje inútil.
   const card = document.querySelector(`.estacion-card[data-estacion="${id}"]`);
@@ -735,6 +833,16 @@ export async function seleccionarSala(estacionId) {
 // nociones de "desbloqueada" que se puedan contradecir.
 let juegoCerrado = false;
 
+// `id` ya no es la posición de la sala (plan-motor-misiones.md §0/P0: secuencia
+// propia, una misión del editor arranca en 6 y no es correlativa) — la
+// posición es `orden`. Esta función antes calculaba "la siguiente" como
+// `estacionActual + 1` sobre el id, lo que en cualquier misión que no fuera
+// exactamente CGC con ids 1-5 habría señalado una sala equivocada o ninguna.
+function _estacionesPorOrden() {
+  const lista = Array.isArray(estacionesCache) ? estacionesCache : [];
+  return lista.slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
 function actualizarBotonSiguiente() {
   const btn = $('btn-siguiente-sala');
   if (!btn) return;
@@ -742,22 +850,26 @@ function actualizarBotonSiguiente() {
   const textoSpan = btn.querySelector('[data-rol="siguiente-texto"]');
   if (textoSpan) textoSpan.textContent = 'Siguiente sala';
 
-  const siguiente = estacionActual == null ? null : Number(estacionActual) + 1;
+  const ordenadas = _estacionesPorOrden();
+  const idxActual = estacionActual == null ? -1 : ordenadas.findIndex((e) => Number(e.id) === Number(estacionActual));
+  const siguienteEst = idxActual >= 0 && idxActual + 1 < ordenadas.length ? ordenadas[idxActual + 1] : null;
+  const esUltimaSala = idxActual >= 0 && idxActual === ordenadas.length - 1;
 
-  // En la Sala 5 no hay "siguiente sala" — el paso es el veredicto (código
-  // maestro). Antes esta rama solo ocultaba el botón ("un botón muerto ahí
-  // solo confunde") pero nada más en todo el código revelaba #pantalla-
-  // veredicto: la sección con el input del código maestro se quedaba oculta
-  // para siempre y no había ninguna forma real de llegar a ella (encontrado
-  // probando en navegador, resolviendo las 5 salas de punta a punta — 2026-
-  // 08-28, pedido de Fernando de darle cierre a la Sala 5). Este botón, ya
-  // resuelta la Sala 5, se reutiliza como puente al veredicto.
-  if (!siguiente || siguiente > TOTAL_ESTACIONES) {
-    if (Number(estacionActual) === TOTAL_ESTACIONES) {
-      const progreso5 = progresoEstacionesCache.find(
-        (p) => Number(p.estacion_id ?? p.id) === TOTAL_ESTACIONES
+  // Sin siguiente sala: si la actual es la última de la misión (por orden,
+  // no por id) el paso es el veredicto (código maestro). Antes esta rama
+  // solo ocultaba el botón ("un botón muerto ahí solo confunde") pero nada
+  // más en todo el código revelaba #pantalla-veredicto: la sección con el
+  // input del código maestro se quedaba oculta para siempre y no había
+  // ninguna forma real de llegar a ella (encontrado probando en navegador,
+  // resolviendo las 5 salas de punta a punta — 2026-08-28, pedido de
+  // Fernando de darle cierre a la última sala). Este botón, ya resuelta la
+  // última sala, se reutiliza como puente al veredicto.
+  if (!siguienteEst) {
+    if (esUltimaSala) {
+      const progresoActual = progresoEstacionesCache.find(
+        (p) => Number(p.estacion_id ?? p.id) === Number(estacionActual)
       );
-      if (progreso5 && progreso5.estado === 'resuelta') {
+      if (progresoActual && progresoActual.estado === 'resuelta') {
         setHidden(btn, false);
         btn.dataset.destino = 'veredicto';
         btn.disabled = false;
@@ -774,14 +886,15 @@ function actualizarBotonSiguiente() {
     return;
   }
 
-  const card = document.querySelector(`#nav-salas .estacion-card[data-estacion="${siguiente}"]`);
+  const numeroVisible = siguienteEst.orden ?? idxActual + 2;
+  const card = document.querySelector(`#nav-salas .estacion-card[data-estacion="${siguienteEst.id}"]`);
   const bloqueada = juegoCerrado || !card || card.classList.contains('is-bloqueada');
 
   setHidden(btn, false);
-  btn.dataset.destino = String(siguiente);
+  btn.dataset.destino = String(siguienteEst.id);
   btn.disabled = bloqueada;
   btn.setAttribute('aria-disabled', String(bloqueada));
-  btn.setAttribute('aria-label', bloqueada ? `Siguiente sala (Sala ${siguiente}, bloqueada)` : `Ir a la Sala ${siguiente}`);
+  btn.setAttribute('aria-label', bloqueada ? `Siguiente sala (Sala ${numeroVisible}, bloqueada)` : `Ir a la Sala ${numeroVisible}`);
 
   // El motivo se dice con texto, no solo con el boton apagado (§13: ningun
   // estado solo por color/forma).
@@ -792,7 +905,7 @@ function actualizarBotonSiguiente() {
     } else {
       motivo.textContent = juegoCerrado
         ? 'La sesión está cerrada: ya no se puede avanzar.'
-        : `La Sala ${siguiente} se desbloquea cuando resuelvas esta.`;
+        : `La Sala ${numeroVisible} se desbloquea cuando resuelvas esta.`;
       setHidden(motivo, false);
     }
   }
@@ -886,9 +999,15 @@ export async function verificarEstacion() {
     const pista = datos.pista || '';
     const detalle = datos.detalle || '';
     const intentos = datos.intentos != null ? `Intento ${datos.intentos}` : '';
+    // El denominador de "parcial-{n}" no lo manda el servidor (§1.4) — sale
+    // de la estación actual, cacheada en estacionesCache (checklist/clasificacion).
+    const estacionInfo = Array.isArray(estacionesCache)
+      ? estacionesCache.find((e) => Number(e.id) === Number(estacionId))
+      : null;
+    const totalItems = estacionInfo?.interaccion?.items?.length;
     // Mensaje que no revela la respuesta: combina pista del servidor + detalle genérico
     // Sin exponer cuál parte acertó (parcial:true solo dice "vas por buen camino").
-    let texto = pista || mensajeDetalle(detalle);
+    let texto = pista || mensajeDetalle(detalle, totalItems);
     if (datos.parcial) {
       // Mensaje adicional permitido por §12 sin revelar cuál acertó
       texto = `${texto} — Vas por buen camino, revisá lo que falta.`;
@@ -904,24 +1023,29 @@ export async function verificarEstacion() {
   mostrarFeedbackEstacion('Respuesta no reconocida del servidor.', 'error');
 }
 
-function mensajeDetalle(detalle) {
-  // Traduce claves de §12 a mensajes que no revelan la respuesta
+// Vocabulario cerrado de §1.4 (plan-motor-misiones.md) — el único que
+// `verificar_estacion` puede devolver. Los valores viejos (`orden-mal`,
+// `eslabon-mal`, `porcentaje-mal`, `porcentaje-fuera-rango`, `juicio-mal`,
+// `inconsistencia-mal`) ya no existen, quedaban del motor de corrección
+// anterior (ramificado por número de sala, no por tipo de reto).
+// `totalItems`: para `parcial-{n}` el servidor solo manda el numerador — el
+// denominador sale del lado del cliente, de `interaccion.items.length` de la
+// estación actual (checklist/clasificacion).
+function mensajeDetalle(detalle, totalItems) {
   switch (detalle) {
-    case 'vacio': return 'No se recibió una respuesta. Completá los campos e intentá de nuevo.';
-    case 'orden-mal': return 'El orden no coincide. Revisá la secuencia de la cadena.';
-    case 'eslabon-mal': return 'El eslabón señalado no es el correcto.';
-    case 'ambos-mal': return 'Tanto el orden como el eslabón necesitan revisión.';
-    case 'porcentaje-mal': return 'El porcentaje no coincide con el expediente.';
-    case 'porcentaje-fuera-rango': return 'Estás cerca, pero el valor no es el punto medio del rango.';
-    case 'juicio-mal': return 'El juicio sobre la afirmación no coincide.';
-    case 'inconsistencia-mal': return 'La inconsistencia señalada no es la correcta.';
-    case 'sobre-marcado': return 'Marcaste actores de más. Solo algunos tienen evidencia directa.';
-    case 'sub-marcado': return 'Te falta marcar a alguien con evidencia directa.';
-    case 'equivocados': return 'Revisá la selección: hay marcas que sobran y faltan.';
+    case 'vacio': return 'Todavía no respondiste. Completá el reto antes de verificar.';
+    case 'mecanismo-mal': return 'La respuesta no es correcta. Revisá la evidencia del expediente.';
+    case 'cierre-mal': return 'El reto está bien resuelto, pero la pregunta de cierre no. Revisá esa parte.';
+    case 'ambos-mal': return 'Ni el reto ni la pregunta de cierre están correctos todavía.';
+    case 'sobre-marcado': return 'Marcaste de más. Solo vale lo que tiene evidencia directa en el expediente.';
+    case 'sub-marcado': return 'Te falta marcar al menos uno. Volvé a revisar el expediente.';
+    case 'equivocados': return 'Las marcas no coinciden con la evidencia. Revisá el expediente de nuevo.';
+    case 'fuera-de-rango': return 'Ese número está fuera del rango posible. Revisá el cálculo.';
+    case 'tipo-desconocido': return 'Esta sala tiene un problema de configuración. Avisale a tu docente.';
     default:
       if (detalle && detalle.startsWith('parcial-')) {
         const n = detalle.split('-')[1];
-        return `Acertaste ${n} de 5. Revisá las que faltan.`;
+        return totalItems ? `Acertaste ${n} de ${totalItems}.` : `Acertaste ${n}.`;
       }
       return detalle || 'Revisá tu respuesta e intentá de nuevo.';
   }
@@ -1068,7 +1192,7 @@ function pintarResumen() {
   if (elEquipo) elEquipo.textContent = (equipoActual && equipoActual.nombre) || '—';
 
   const elResueltas = $('resumen-resueltas');
-  if (elResueltas) elResueltas.textContent = `${resueltas} / ${TOTAL_ESTACIONES}`;
+  if (elResueltas) elResueltas.textContent = `${resueltas} / ${estaciones.length || TOTAL_ESTACIONES}`;
 
   const elIntentos = $('resumen-intentos');
   if (elIntentos) elIntentos.textContent = String(intentos);

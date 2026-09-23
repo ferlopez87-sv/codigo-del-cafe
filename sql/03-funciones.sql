@@ -54,6 +54,32 @@ language sql security definer stable set search_path = public as $$
 $$;
 
 -- -----------------------------------------------------------------------------
+-- misiones_publicas() — catálogo de misiones para ELEGIR, no para espiar.
+--
+-- `misiones` es deny-all salvo super-admin (06-superadmin.sql), igual que
+-- `estaciones`. Correcto para el editor, pero deja sin salida a un caso
+-- legítimo: cualquier docente que crea una sesión de clase tiene que poder
+-- elegir qué misión se juega, y un SELECT plano le devuelve 0 filas — no un
+-- error, que es peor: la ruta lo leería como "no hay ninguna misión".
+--
+-- SECURITY DEFINER acotado a lo que NO es spoiler: nunca devuelve
+-- `codigo_maestro` (el código que el equipo tiene que descubrir) ni
+-- `veredicto` (el desenlace). Solo lo necesario para poblar un desplegable.
+-- Exige rol docente: un estudiante no tiene por qué ver el catálogo.
+-- -----------------------------------------------------------------------------
+drop function if exists misiones_publicas();
+create or replace function misiones_publicas()
+returns table (id uuid, slug text, titulo text, subtitulo text, estado text, salas int)
+language sql security definer stable set search_path = public as $$
+  select m.id, m.slug, m.titulo, m.subtitulo, m.estado,
+         (select count(*)::int from estaciones e where e.mision_id = m.id)
+    from misiones m
+   where m.estado = 'publicada'
+     and coalesce((select p.rol = 'docente' from perfiles p where p.id = app.usuario_actual()), false)
+   order by m.titulo
+$$;
+
+-- -----------------------------------------------------------------------------
 -- mi_equipo() — equipo, sesión, integrantes (con es_apuntador) y si YO soy el
 -- apuntador. SECURITY DEFINER (corregido 2026-08-26): `perfiles` solo tiene
 -- política de "ver la propia fila" para un estudiante — sin bypass, el JOIN
@@ -88,7 +114,14 @@ begin
       where i.equipo_id = v_equipo.id
     ), '[]'::jsonb),
     'sesion', (select jsonb_build_object('id', s.id, 'nombre', s.nombre, 'estado', s.estado, 'duracion_minutos', s.duracion_minutos)
-               from sesiones s where s.id = v_equipo.sesion_id)
+               from sesiones s where s.id = v_equipo.sesion_id),
+    -- 'mision' (2026-09-22): el tablero del estudiante necesita el nombre de la
+    -- misión en su cabecera, y `misiones` es deny-all. mi_equipo() ya es
+    -- SECURITY DEFINER, así que viaja por acá en vez de abrir una ruta nueva.
+    -- Solo campos no-spoiler: nunca codigo_maestro ni veredicto.
+    'mision', (select jsonb_build_object('id', m.id, 'titulo', m.titulo, 'subtitulo', m.subtitulo, 'intro', m.intro)
+               from sesiones s join misiones m on m.id = s.mision_id
+              where s.id = v_equipo.sesion_id)
   ) into v_out;
 
   return v_out;
@@ -147,7 +180,7 @@ begin
     -- después de acertar).
     'estaciones', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'estacion_id', pr.estacion_id, 'id', pr.estacion_id, 'estado', pr.estado, 'intentos', pr.intentos,
+        'estacion_id', pr.estacion_id, 'id', pr.estacion_id, 'orden', e.orden, 'estado', pr.estado, 'intentos', pr.intentos,
         'codigo', case when pr.estado = 'resuelta' then e.codigo else null end,
         'feedback', case when pr.estado = 'resuelta' then e.feedback_ok else null end
       ) order by pr.estacion_id)
@@ -155,6 +188,298 @@ begin
       where pr.equipo_id = p_equipo
     ), '[]'::jsonb)
   );
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- normalizar_texto(p_txt) — comparación indulgente de texto libre: minúsculas,
+-- sin acentos, sin espacios de más. Un estudiante que escribe "Agua  Verde",
+-- "agua verde" o "AGUA VERDE" acierta igual. Se usa en respuesta_corta modo
+-- texto y para comparar ids (que el cliente ya manda normalizados, pero no se
+-- depende de eso: el servidor nunca confía en la normalización del cliente).
+-- -----------------------------------------------------------------------------
+create or replace function normalizar_texto(p_txt text) returns text
+language sql immutable set search_path = public as $$
+  select regexp_replace(
+           translate(lower(trim(coalesce(p_txt, ''))),
+                     'áàäâãéèëêíìïîóòöôõúùüûñç',
+                     'aaaaaeeeeiiiiooooouuuunc'),
+           '\s+', ' ', 'g')
+$$;
+
+-- -----------------------------------------------------------------------------
+-- comparar_mecanismo(tipo, interaccion, esperada, enviada) → {correcto, parcial, detalle}
+--
+-- El corazón del motor de corrección (2026-09-22). REEMPLAZA el `case
+-- p_estacion when 1 ... when 5` que vivía dentro de verificar_estacion: la
+-- lógica se ramificaba por NÚMERO DE SALA, así que cambiar el tipo de reto de
+-- una sala desde el editor la dejaba imposible de resolver — el estudiante
+-- respondía bien y el sistema le decía que estaba mal. Ahora se ramifica por
+-- `interaccion.tipo`, que es lo que el editor realmente controla.
+--
+-- Pura e `immutable` a propósito: se puede probar con un `select` suelto desde
+-- psql, sin montar sesión + equipo + apuntador. La lógica anterior era
+-- imposible de probar sin una partida completa, que es la razón por la que
+-- nadie notó nunca sus casos borde.
+--
+-- Formas de `esperada` y `enviada`: plan-motor-misiones.md §1.2 y §1.3.
+-- Nunca lanza: una forma inesperada devuelve incorrecto con detalle, no una
+-- excepción que el cliente vería como "Error de red".
+-- -----------------------------------------------------------------------------
+create or replace function comparar_mecanismo(
+  p_tipo        text,
+  p_interaccion jsonb,
+  p_esperada    jsonb,
+  p_enviada     jsonb
+) returns jsonb
+language plpgsql immutable set search_path = public as $$
+declare
+  v_env  jsonb;
+  v_esp  jsonb;
+  v_ok   boolean := false;
+  v_parc boolean := false;
+  v_det  text    := null;
+begin
+  if p_enviada is null or p_esperada is null then
+    return jsonb_build_object('correcto', false, 'parcial', false, 'detalle', 'vacio');
+  end if;
+
+  v_env := p_enviada->'valor';
+  v_esp := p_esperada->'valor';
+
+  -- Clave ausente o JSON null = todavía no respondió. Distinto de responder mal.
+  if v_env is null or jsonb_typeof(v_env) = 'null' then
+    return jsonb_build_object('correcto', false, 'parcial', false, 'detalle', 'vacio');
+  end if;
+
+  case p_tipo
+
+  -- OPCIÓN ÚNICA -------------------------------------------------------------
+  when 'opcion_unica' then
+    if nullif(trim(v_env #>> '{}'), '') is null then
+      v_det := 'vacio';
+    elsif normalizar_texto(v_env #>> '{}') = normalizar_texto(v_esp #>> '{}') then
+      v_ok := true;
+    else
+      v_det := 'mecanismo-mal';
+    end if;
+
+  -- RESPUESTA CORTA ----------------------------------------------------------
+  when 'respuesta_corta' then
+    declare
+      v_modo   text    := coalesce(p_interaccion->>'modo', 'texto');
+      v_raw    text    := nullif(trim(v_env #>> '{}'), '');
+      v_num    numeric;
+      v_min    numeric := nullif(p_esperada->>'min', '')::numeric;
+      v_max    numeric := nullif(p_esperada->>'max', '')::numeric;
+      v_acepta jsonb;
+    begin
+      -- nullif(...,'') — bug real 2026-08-26: un <input type=number> sin tocar
+      -- manda '' (string vacío), no ausencia de clave ni JSON null. Sin este
+      -- guard el '' llegaba al ::numeric y tronaba con un 500 crudo que el
+      -- cliente mostraba como "Error de red", sin decir nada más.
+      if v_raw is null then
+        v_det := 'vacio';
+
+      elsif v_modo = 'numero' then
+        begin
+          v_num := replace(v_raw, ',', '.')::numeric;
+        exception when others then
+          v_num := null;
+        end;
+
+        if v_num is null then
+          v_det := 'mecanismo-mal';
+        elsif v_min is not null and v_max is not null then
+          -- Respuesta por rango (la Sala del Dinero: 4 a 4.4 %)
+          if v_num between v_min and v_max then v_ok := true;
+          else v_det := 'fuera-de-rango';
+          end if;
+        else
+          -- Respuesta por valor + variantes aceptadas, tolerancia ±0.01
+          v_acepta := coalesce(p_esperada->'acepta', '[]'::jsonb) || jsonb_build_array(v_esp);
+          select coalesce(bool_or(abs(v_num - x::numeric) <= 0.01), false)
+            into v_ok
+            from jsonb_array_elements_text(v_acepta) as t(x)
+           where x ~ '^-?[0-9]+(\.[0-9]+)?$';
+          if not v_ok then v_det := 'mecanismo-mal'; end if;
+        end if;
+
+      else
+        v_acepta := coalesce(p_esperada->'acepta', '[]'::jsonb) || jsonb_build_array(v_esp);
+        select coalesce(bool_or(normalizar_texto(x) = normalizar_texto(v_raw)), false)
+          into v_ok
+          from jsonb_array_elements_text(v_acepta) as t(x);
+        if not v_ok then v_det := 'mecanismo-mal'; end if;
+      end if;
+    end;
+
+  -- ORDENAR ------------------------------------------------------------------
+  when 'orden' then
+    declare
+      v_a text[];
+      v_b text[];
+    begin
+      if jsonb_typeof(v_env) <> 'array' or jsonb_array_length(v_env) = 0 then
+        v_det := 'vacio';
+      else
+        select array_agg(normalizar_texto(x) order by ord) into v_a
+          from jsonb_array_elements_text(v_env) with ordinality as t(x, ord);
+        select array_agg(normalizar_texto(x) order by ord) into v_b
+          from jsonb_array_elements_text(v_esp) with ordinality as t(x, ord);
+        if v_a = v_b then v_ok := true; else v_det := 'mecanismo-mal'; end if;
+      end if;
+    end;
+
+  -- SELECCIÓN MÚLTIPLE -------------------------------------------------------
+  when 'checklist' then
+    declare
+      v_a     text[];
+      v_b     text[];
+      v_extra int;
+      v_falta int;
+    begin
+      if jsonb_typeof(v_env) <> 'array' or jsonb_array_length(v_env) = 0 then
+        v_det := 'vacio';
+      else
+        select array_agg(v order by v) into v_a
+          from (select distinct normalizar_texto(x) v from jsonb_array_elements_text(v_env) x) s;
+        select array_agg(v order by v) into v_b
+          from (select distinct normalizar_texto(x) v from jsonb_array_elements_text(v_esp) x) s;
+        v_a := coalesce(v_a, '{}'); v_b := coalesce(v_b, '{}');
+
+        select count(*) into v_extra from unnest(v_a) e where not (e = any(v_b));
+        select count(*) into v_falta from unnest(v_b) c where not (c = any(v_a));
+
+        if v_a = v_b then v_ok := true;
+        elsif v_extra > 0 and v_falta > 0 then v_det := 'equivocados';
+        elsif v_extra > 0 then v_parc := true; v_det := 'sobre-marcado';
+        else v_parc := true; v_det := 'sub-marcado';
+        end if;
+      end if;
+    end;
+
+  -- CLASIFICAR ---------------------------------------------------------------
+  -- Mapa ítem→categoría, no arreglo posicional (que era la forma vieja de la
+  -- Sala de la Verdad). Así reordenar las frases en el editor no invalida la
+  -- respuesta correcta.
+  when 'clasificacion' then
+    declare
+      v_items text[];
+      v_total int;
+      v_resp  int;
+      v_bien  int;
+    begin
+      select array_agg(x->>'id') into v_items
+        from jsonb_array_elements(coalesce(p_interaccion->'items', '[]'::jsonb)) x;
+      v_total := coalesce(array_length(v_items, 1), 0);
+
+      if v_total = 0 or jsonb_typeof(v_env) <> 'object' then
+        v_det := 'vacio';
+      else
+        select
+          count(*) filter (where nullif(trim(coalesce(v_env->>i, '')), '') is not null),
+          count(*) filter (where nullif(trim(coalesce(v_env->>i, '')), '') is not null
+                             and normalizar_texto(v_env->>i) = normalizar_texto(coalesce(v_esp->>i, '')))
+          into v_resp, v_bien
+          from unnest(v_items) i;
+
+        if v_resp = 0 then v_det := 'vacio';
+        elsif v_bien = v_total then v_ok := true;
+        else v_parc := v_bien > 0; v_det := 'parcial-' || v_bien;
+        end if;
+      end if;
+    end;
+
+  else
+    -- Tipo que el motor no conoce. Nunca debería llegar (el validador de la
+    -- ruta de contenido lo rechaza antes de guardar), pero si llega no se
+    -- rompe la partida: se reporta y ya.
+    v_det := 'tipo-desconocido';
+  end case;
+
+  return jsonb_build_object('correcto', v_ok, 'parcial', coalesce(v_parc, false), 'detalle', v_det);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- evaluar_reto(interaccion, esperada, enviada) → {correcto, parcial, detalle}
+--
+-- UNA sala = UN mecanismo + (opcional) UNA pregunta de cierre de opción única.
+-- Esta función combina las dos comparaciones; comparar_mecanismo() sola no sabe
+-- nada de `cierre` y nunca lo mira.
+--
+-- Existe como función propia (2026-09-22) porque la necesitan DOS caminos: el
+-- juego real (verificar_estacion) y el botón "Probar sala" del editor, que
+-- corrige sin escribir en intentos ni progreso. Escribir la combinación dos
+-- veces —una en plpgsql y otra en JS— es pedir que se desincronicen: el editor
+-- le diría al docente que su sala funciona y el juego la rechazaría. Ya pasó
+-- dos veces hoy con reglas duplicadas (el orden de los fragmentos del código
+-- maestro, y la composición del maestro mismo). Una sola fuente de verdad.
+-- -----------------------------------------------------------------------------
+create or replace function evaluar_reto(p_interaccion jsonb, p_esperada jsonb, p_enviada jsonb)
+returns jsonb language plpgsql immutable set search_path = public as $ev$
+declare
+  v_mec    jsonb;
+  v_cie    jsonb;
+  v_hay_c  boolean := (p_interaccion ? 'cierre');
+  v_mec_ok boolean;
+  v_cie_ok boolean;
+begin
+  v_mec := comparar_mecanismo(p_interaccion->>'tipo', p_interaccion, p_esperada, p_enviada);
+  v_mec_ok := (v_mec->>'correcto')::boolean;
+
+  if not v_hay_c then
+    return v_mec;
+  end if;
+
+  v_cie := comparar_mecanismo(
+             'opcion_unica',
+             p_interaccion->'cierre',
+             jsonb_build_object('valor', p_esperada->'cierre'),
+             jsonb_build_object('valor', p_enviada->'cierre'));
+  v_cie_ok := (v_cie->>'correcto')::boolean;
+
+  if (v_mec->>'detalle') = 'vacio' and (v_cie->>'detalle') = 'vacio' then
+    return jsonb_build_object('correcto', false, 'parcial', false, 'detalle', 'vacio');
+  elsif v_mec_ok and v_cie_ok then
+    return jsonb_build_object('correcto', true, 'parcial', false, 'detalle', null);
+  elsif v_mec_ok then
+    return jsonb_build_object('correcto', false, 'parcial', true, 'detalle', 'cierre-mal');
+  elsif v_cie_ok then
+    return jsonb_build_object('correcto', false, 'parcial', true,
+                              'detalle', coalesce(nullif(v_mec->>'detalle',''), 'mecanismo-mal'));
+  else
+    return jsonb_build_object(
+      'correcto', false,
+      'parcial',  coalesce((v_mec->>'parcial')::boolean, false),
+      'detalle',  case when coalesce((v_mec->>'parcial')::boolean, false)
+                       then v_mec->>'detalle' else 'ambos-mal' end);
+  end if;
+end;
+$ev$;
+
+-- -----------------------------------------------------------------------------
+-- inicializar_progreso_equipo(p_equipo) — crea una fila de `progreso` por cada
+-- sala de la misión que juega ese equipo. Reemplaza el `for(let i=1;i<=5;i++)`
+-- que estaba cableado en srv/rutas/docente.js. Vive acá y no en la ruta porque
+-- el repartidor de equipos en lote (P6) necesita exactamente lo mismo, y dos
+-- copias de esta regla en dos rutas distintas se desincronizan.
+-- -----------------------------------------------------------------------------
+create or replace function inicializar_progreso_equipo(p_equipo uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare v_n int;
+begin
+  insert into progreso (equipo_id, estacion_id, estado)
+  select p_equipo, e.id,
+         case when e.desbloqueo = 'libre' then 'pendiente' else 'bloqueada' end
+    from equipos eq
+    join sesiones s   on s.id = eq.sesion_id
+    join estaciones e on e.mision_id = s.mision_id
+   where eq.id = p_equipo
+  on conflict (equipo_id, estacion_id) do nothing;
+  get diagnostics v_n = row_count;
+  return v_n;
 end;
 $$;
 
@@ -221,107 +546,52 @@ begin
     return jsonb_build_object('error', 'tiempo_agotado');
   end if;
 
-  if p_estacion = 5 then
-    if (select count(*) from progreso where equipo_id = p_equipo and estacion_id in (1,2,3,4) and estado = 'resuelta') < 4 then
+  select * into v_est from estaciones where id = p_estacion;
+  if not found then return jsonb_build_object('error', 'estacion_invalida'); end if;
+
+  -- Desbloqueo por regla de la SALA, no por su número (2026-09-22). Antes acá
+  -- estaba escrito `if p_estacion = 5 ... estacion_id in (1,2,3,4)`, que ataba
+  -- el diseño del juego a que hubiera exactamente 5 salas y a que la última
+  -- fuera la 5. Ahora cada sala declara su propio `desbloqueo`.
+  if v_est.desbloqueo = 'secuencial' then
+    if exists (select 1 from estaciones e
+                 left join progreso pr on pr.estacion_id = e.id and pr.equipo_id = p_equipo
+                where e.mision_id = v_est.mision_id
+                  and e.orden = v_est.orden - 1
+                  and coalesce(pr.estado, 'pendiente') <> 'resuelta') then
+      return jsonb_build_object('error', 'bloqueada');
+    end if;
+  elsif v_est.desbloqueo = 'tras_todas' then
+    if exists (select 1 from estaciones e
+                 left join progreso pr on pr.estacion_id = e.id and pr.equipo_id = p_equipo
+                where e.mision_id = v_est.mision_id
+                  and e.orden < v_est.orden
+                  and coalesce(pr.estado, 'pendiente') <> 'resuelta') then
       return jsonb_build_object('error', 'bloqueada');
     end if;
   end if;
 
   select * into v_progreso from progreso where equipo_id = p_equipo and estacion_id = p_estacion;
-  select * into v_est from estaciones where id = p_estacion;
 
   if v_progreso.estado = 'resuelta' then
     return jsonb_build_object('ok', true, 'parcial', false, 'intentos', v_progreso.intentos, 'codigo', v_est.codigo, 'feedback', v_est.feedback_ok);
   end if;
 
-  -- Comparación por tipo de estación (§14/§15) — la respuesta correcta SIEMPRE sale de estaciones.respuesta, nunca hardcodeada acá.
-  case p_estacion
-    when 1 then
-      if p_respuesta is null or p_respuesta->'orden' is null or p_respuesta->>'eslabon' is null then
-        v_detalle := 'vacio';
-      else
-        declare v_orden_ok boolean := (p_respuesta->'orden' = v_est.respuesta->'orden');
-                v_eslabon_ok boolean := (p_respuesta->>'eslabon' = v_est.respuesta->>'eslabon');
-        begin
-          if v_orden_ok and v_eslabon_ok then v_correcto := true;
-          elsif v_orden_ok or v_eslabon_ok then v_parcial := true; v_detalle := case when v_orden_ok then 'eslabon-mal' else 'orden-mal' end;
-          else v_detalle := 'ambos-mal';
-          end if;
-        end;
-      end if;
-    when 2 then
-      -- nullif(...,'') — bug real encontrado en navegador 2026-08-26: el
-      -- control numérico sin tocar manda '' (string vacío), no ausencia de
-      -- clave ni JSON null. El guard original solo miraba `is null`, así
-      -- que '' se colaba hasta el ::numeric de más abajo y tronaba con un
-      -- 500 crudo (invalid input syntax for type numeric) — el cliente lo
-      -- mostraba como "Error de red" sin decir nada más.
-      if p_respuesta is null or nullif(p_respuesta->>'porcentaje','') is null or p_respuesta->>'enganosa' is null then
-        v_detalle := 'vacio';
-      else
-        declare v_pct numeric := (p_respuesta->>'porcentaje')::numeric;
-                v_pct_ok boolean;
-                v_juicio_ok boolean := (p_respuesta->>'enganosa' = v_est.respuesta->>'enganosa');
-        begin
-          if v_pct < 0 or v_pct > 100 then
-            v_detalle := 'porcentaje-fuera-rango';
-          else
-            select bool_or((v_pct - (x.val)::numeric) between -0.01 and 0.01) into v_pct_ok
-              from jsonb_array_elements_text(v_est.respuesta->'porcentaje_acepta') as x(val);
-            if v_pct_ok and v_juicio_ok then v_correcto := true;
-            elsif v_pct_ok or v_juicio_ok then v_parcial := true; v_detalle := case when v_pct_ok then 'juicio-mal' else 'porcentaje-mal' end;
-            else v_detalle := 'porcentaje-mal';
-            end if;
-          end if;
-        end;
-      end if;
-    when 3 then
-      -- Mismo bug que E2 arriba — nullif(...,'') trata el string vacío
-      -- como ausente en vez de dejarlo llegar al ::numeric de abajo.
-      if p_respuesta is null or nullif(p_respuesta->>'porcentaje','') is null or p_respuesta->>'inconsistencia' is null then
-        v_detalle := 'vacio';
-      else
-        declare v_pct numeric := (p_respuesta->>'porcentaje')::numeric;
-                v_pct_ok boolean := v_pct between (v_est.respuesta->>'porcentaje_min')::numeric and (v_est.respuesta->>'porcentaje_max')::numeric;
-                v_inc_ok boolean := (p_respuesta->>'inconsistencia' = v_est.respuesta->>'inconsistencia');
-        begin
-          if v_pct_ok and v_inc_ok then v_correcto := true;
-          elsif v_pct_ok or v_inc_ok then v_parcial := true; v_detalle := case when v_pct_ok then 'inconsistencia-mal' else 'porcentaje-mal' end;
-          else v_detalle := 'porcentaje-mal';
-          end if;
-        end;
-      end if;
-    when 4 then
-      if p_respuesta is null or p_respuesta->'actores' is null then
-        v_detalle := 'vacio';
-      else
-        declare v_env text[] := (select array_agg(x order by x) from jsonb_array_elements_text(p_respuesta->'actores') x);
-                v_correctos text[] := (select array_agg(x order by x) from jsonb_array_elements_text(v_est.respuesta->'actores') x);
-                v_extra int := (select count(*) from unnest(v_env) e where not (e = any(v_correctos)));
-                v_falta int := (select count(*) from unnest(v_correctos) c where not (c = any(v_env)));
-        begin
-          if v_env = v_correctos then v_correcto := true;
-          elsif v_extra > 0 and v_falta > 0 then v_detalle := 'equivocados';
-          elsif v_extra > 0 then v_parcial := true; v_detalle := 'sobre-marcado';
-          else v_parcial := true; v_detalle := 'sub-marcado';
-          end if;
-        end;
-      end if;
-    when 5 then
-      if p_respuesta is null or jsonb_array_length(coalesce(p_respuesta->'frases','[]'::jsonb)) <> 5 then
-        v_detalle := 'vacio';
-      else
-        declare v_n_correctas int := (
-          select count(*) from generate_series(0,4) idx
-          where (p_respuesta->'frases'->>idx) = (v_est.respuesta->'frases'->>idx)
-        );
-        begin
-          if v_n_correctas = 5 then v_correcto := true;
-          else v_parcial := (v_n_correctas > 0); v_detalle := 'parcial-'||v_n_correctas;
-          end if;
-        end;
-      end if;
-  end case;
+  -- Comparación POR TIPO DE RETO, no por número de sala (2026-09-22).
+  -- Acá vivía un `case p_estacion when 1 ... when 5` de ~90 líneas: la sala 1
+  -- exigía {orden,eslabon}, la 2 y la 3 {porcentaje,...}, la 4 {actores}, la 5
+  -- exactamente 5 frases. Por eso cambiar el tipo de reto de una sala desde el
+  -- editor la dejaba imposible de resolver.
+  --
+  -- La regla completa (mecanismo + cierre opcional) vive en evaluar_reto(), que
+  -- también usa el botón "Probar sala" del editor. No se duplica acá.
+  declare v_ev jsonb;
+  begin
+    v_ev := evaluar_reto(v_est.interaccion, v_est.respuesta, p_respuesta);
+    v_correcto := (v_ev->>'correcto')::boolean;
+    v_parcial  := coalesce((v_ev->>'parcial')::boolean, false);
+    v_detalle  := v_ev->>'detalle';
+  end;
 
   v_intento := coalesce(v_progreso.intentos, 0) + 1;
 
@@ -333,11 +603,25 @@ begin
   on conflict (equipo_id, estacion_id) do update set
     estado = excluded.estado, intentos = excluded.intentos, resuelta_en = excluded.resuelta_en;
 
-  -- Desbloqueo de la Estación 5 cuando 1-4 quedan resueltas (CONTRACT §2.2)
-  if v_correcto and p_estacion in (1,2,3,4) then
-    if (select count(*) from progreso where equipo_id = p_equipo and estacion_id in (1,2,3,4) and estado = 'resuelta') = 4 then
-      update progreso set estado = 'pendiente' where equipo_id = p_equipo and estacion_id = 5 and estado = 'bloqueada';
-    end if;
+  -- Desbloqueo en cascada (2026-09-22): al acertar, se revisa qué salas
+  -- BLOQUEADAS de la misma misión ya cumplen su condición. Antes esto era
+  -- `if p_estacion in (1,2,3,4) ... estacion_id = 5`, cableado a las 5 salas.
+  if v_correcto then
+    update progreso pr set estado = 'pendiente'
+      from estaciones e
+     where pr.equipo_id = p_equipo
+       and pr.estacion_id = e.id
+       and pr.estado = 'bloqueada'
+       and e.mision_id = v_est.mision_id
+       and not exists (
+         select 1 from estaciones prev
+           left join progreso pp on pp.estacion_id = prev.id and pp.equipo_id = p_equipo
+          where prev.mision_id = e.mision_id
+            and coalesce(pp.estado, 'pendiente') <> 'resuelta'
+            and case when e.desbloqueo = 'secuencial' then prev.orden = e.orden - 1
+                     when e.desbloqueo = 'tras_todas' then prev.orden < e.orden
+                     else false end
+       );
   end if;
 
   if v_correcto then
@@ -361,7 +645,11 @@ declare
   v_hay_apuntador boolean;
   v_apuntador_nombre text;
   v_norm text := regexp_replace(upper(coalesce(p_codigo,'')), '[^A-Z0-9]', '', 'g');
-  v_maestro text := regexp_replace(upper('06-87-04-2P-4'), '[^A-Z0-9]', '', 'g');
+  -- 2026-09-22: antes acá estaba el literal '06-87-04-2P-4'. Ahora sale de la
+  -- misión que juega este equipo. `codigo_maestro` NULL = se compone juntando
+  -- los fragmentos de las salas por orden, que es el caso por defecto.
+  v_mision misiones;
+  v_maestro text;
 begin
   if v_uid is null or not exists (select 1 from integrantes where equipo_id = p_equipo and perfil_id = v_uid) then
     return jsonb_build_object('error', 'no_autorizado');
@@ -377,10 +665,22 @@ begin
     return jsonb_build_object('error', 'no_apuntador', 'apuntador', v_apuntador_nombre);
   end if;
 
-  if v_norm = v_maestro then
+  select m.* into v_mision
+    from equipos e join sesiones s on s.id = e.sesion_id
+    join misiones m on m.id = s.mision_id
+   where e.id = p_equipo;
+  if not found then return jsonb_build_object('error', 'sin_mision'); end if;
+
+  v_maestro := regexp_replace(upper(coalesce(
+                 v_mision.codigo_maestro,
+                 (select string_agg(es.codigo, '-' order by es.orden)
+                    from estaciones es where es.mision_id = v_mision.id),
+                 '')), '[^A-Z0-9]', '', 'g');
+
+  if v_maestro <> '' and v_norm = v_maestro then
     update equipos set finalizado_en = coalesce(finalizado_en, now()), motivo_fin = coalesce(motivo_fin, 'completado')
       where id = p_equipo;
-    return jsonb_build_object('ok', true, 'veredicto', 'CGC no sostiene su promesa 2027 con evidencia suficiente en las áreas auditadas.');
+    return jsonb_build_object('ok', true, 'veredicto', v_mision.veredicto);
   else
     return jsonb_build_object('ok', false, 'error', 'codigo_incorrecto');
   end if;

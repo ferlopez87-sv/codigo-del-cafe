@@ -1,30 +1,11 @@
 import { Router } from 'express';
-import crypto from 'crypto';
 import { pool, conSesion } from '../db.js';
 import { hashCodigo } from '../email.js';
+import { generarCodigoEquipo } from '../util.js';
 const router = Router();
 
 // helper: verificar rol docente (RLS ya lo hace, pero early 403)
 function esDocente(perfil){ return perfil?.rol==='docente'; }
-
-// mismo criterio que generar-codigo-personal (srv/rutas/auth.js): defensa en
-// profundidad además de la RLS de sql/06-superadmin.sql — nunca depender de
-// una sola capa para algo que rompe el caso para TODOS los equipos si falla.
-function esSuperAdmin(perfil){
-  return String(perfil?.correo||'').trim().toLowerCase() === 'fglopez@monicaherrera.edu.sv';
-}
-
-// Código de equipo legible: 6 caracteres, mayúsculas+dígitos, sin 0/O/1/I
-// (se confunden fácil al leerlo en voz alta o proyectado). No es para
-// resistir fuerza bruta a gran escala — es para que un equipo de 3 personas
-// lo tipee sin errores; la seguridad real de "quién puede generarlo" está en
-// que solo el docente dueño del equipo puede pedirlo (RLS sobre `equipos`).
-function generarCodigoEquipo(){
-  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for(let i=0;i<6;i++) out += alfabeto[crypto.randomInt(alfabeto.length)];
-  return out;
-}
 
 // GET /todo-equipos — consola de super-admin (2026-08-26): la sección ya
 // existía en el HTML pero nunca se llenaba de nada ("solo un adorno"). Las
@@ -61,17 +42,31 @@ router.get('/sesiones', async (req,res)=>{
     res.json(rows);
   }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
 });
+// P1 (plan-motor-misiones.md §"srv/rutas/docente.js — solo dos rutas"):
+// acepta y persiste `mision_id`. Si no viene, usa `misiones_publicas()`
+// (sql/03-funciones.sql, agregada por la coordinadora tras reportar que
+// `misiones` es deny-all salvo super-admin): exactamente una misión
+// publicada → esa; cero o más de una → 400 parametros_faltantes.
 router.post('/sesiones', async (req,res)=>{
   if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
   const { nombre, duracion_minutos } = req.body||{};
+  let { mision_id } = req.body||{};
   if(!nombre) return res.status(400).json({ error:'parametros_faltantes' });
   try{
     const row = await conSesion(req.perfil.id, async c=>{
-      const q = await c.query('INSERT INTO sesiones (nombre, docente_id, duracion_minutos) VALUES ($1,$2,$3) RETURNING *', [String(nombre).trim(), req.perfil.id, Number(duracion_minutos)||50]);
+      if(!mision_id){
+        const m = await c.query('SELECT * FROM misiones_publicas()');
+        if(m.rows.length !== 1) throw new Error('parametros_faltantes');
+        mision_id = m.rows[0].id;
+      }
+      const q = await c.query('INSERT INTO sesiones (nombre, docente_id, duracion_minutos, mision_id) VALUES ($1,$2,$3,$4) RETURNING *', [String(nombre).trim(), req.perfil.id, Number(duracion_minutos)||50, mision_id]);
       return q.rows[0];
     });
     res.json(row);
-  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
+  }catch(e){
+    if(e.message==='parametros_faltantes') return res.status(400).json({ error:'parametros_faltantes' });
+    console.error(e); res.status(500).json({ error:'error_interno' });
+  }
 });
 // DELETE /sesiones/:id — 2026-08-26, distinto de "cerrar" (que solo marca
 // estado='cerrada' y conserva todo). Esto borra la fila de verdad; el
@@ -164,8 +159,11 @@ router.post('/equipos', async (req,res)=>{
   try{
     const row = await conSesion(req.perfil.id, async c=>{
       const q=await c.query('INSERT INTO equipos (sesion_id, nombre) VALUES ($1,$2) RETURNING *', [sesion_id, String(nombre).trim()]);
-      // inicializar progreso para 5 estaciones
-      for(let i=1;i<=5;i++) await c.query('INSERT INTO progreso (equipo_id, estacion_id, estado) VALUES ($1,$2, $3) ON CONFLICT DO NOTHING', [q.rows[0].id, i, i===5?'bloqueada':'pendiente']);
+      // P1: reemplaza el `for(let i=1;i<=5;i++)` cableado a 5 salas fijas —
+      // ahora usa inicializar_progreso_equipo(uuid) (sql/03-funciones.sql),
+      // que deriva las salas de la misión de la sesión del equipo y respeta
+      // `desbloqueo` por sala. Misma función que va a reusar P6-servidor.
+      await c.query('SELECT inicializar_progreso_equipo($1)', [q.rows[0].id]);
       return q.rows[0];
     });
     res.json(row);
@@ -275,6 +273,16 @@ router.get('/desempeno/:sesion', async (req,res)=>{
     res.json(rows);
   }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
 });
+router.get('/calificaciones/:equipo', async (req,res)=>{
+  if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
+  try{
+    const row = await conSesion(req.perfil.id, async c=>{
+      const q=await c.query('SELECT * FROM calificaciones WHERE equipo_id=$1', [req.params.equipo]);
+      return q.rows[0] || null;
+    });
+    res.json(row);
+  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
+});
 router.post('/calificaciones/:equipo', async (req,res)=>{
   if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
   const rubrica = req.body||{};
@@ -289,83 +297,9 @@ router.post('/calificaciones/:equipo', async (req,res)=>{
     res.json(row);
   }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
 });
-// ---------------------------------------------------------------------------
-// Editor de contenido de las 5 salas (2026-09-02) — solo fglopez. El
-// contenido es una sola tabla compartida por todas las sesiones de todos
-// los docentes; un error de cualquiera rompe el caso para todos, por eso
-// esto NO es una capacidad de docente normal (a diferencia del resto de
-// este archivo, gateado por RLS de `docente_id`). interaccion/codigo/
-// respuesta quedan fuera a propósito — nunca se nombran en el UPDATE — se
-// siguen editando solo por sql/05-seed.sql.
-// ---------------------------------------------------------------------------
-
-// Forma válida de un VALOR de `datos` (una clave del objeto): string, array
-// de strings, o un nivel de objeto de strings — los 3 casos reales que ya
-// existen en sql/05-seed.sql (texto simple, huella hídrica en lista,
-// reparto_taza de Sala del Dinero). Cualquier otra forma se rechaza — nunca
-// se relaja esto, es la lección del salto de línea que rompió el JSON.
-function formaValidaDeDato(valor){
-  if (typeof valor === 'string') return true;
-  if (Array.isArray(valor)) return valor.every((v) => typeof v === 'string');
-  if (valor && typeof valor === 'object') return Object.values(valor).every((v) => typeof v === 'string');
-  return false;
-}
-function validarDatos(datos){
-  if (!datos || typeof datos !== 'object' || Array.isArray(datos)) return false;
-  return Object.values(datos).every(formaValidaDeDato);
-}
-
-// GET /estaciones — trae TODO (incluidas pistas/feedback_ok, que
-// estaciones_publicas oculta a estudiantes) para poblar el editor.
-router.get('/estaciones', async (req,res)=>{
-  if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
-  if(!esSuperAdmin(req.perfil)) return res.status(403).json({ error:'no_autorizado' });
-  try{
-    const rows = await conSesion(req.perfil.id, async c=>{
-      const q = await c.query('SELECT * FROM estaciones ORDER BY id');
-      return q.rows;
-    });
-    res.json(rows);
-  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
-});
-
-// PUT /estaciones/:id — valida el body ANTES de tocar la base. Si algo no
-// valida: 400 { error:'dato_invalido', campo } y la base ni se toca — nunca
-// un 500 genérico ni un guardado parcial.
-router.put('/estaciones/:id', async (req,res)=>{
-  if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });
-  if(!esSuperAdmin(req.perfil)) return res.status(403).json({ error:'no_autorizado' });
-  const id = Number(req.params.id);
-  if(!Number.isInteger(id) || id<1 || id>5) return res.status(400).json({ error:'dato_invalido', campo:'id' });
-
-  const b = req.body||{};
-  for(const campo of ['titulo','pilar','narrativa','reto','feedback_ok']){
-    if(typeof b[campo] !== 'string' || !b[campo].trim()) return res.status(400).json({ error:'dato_invalido', campo });
-  }
-  if(!Array.isArray(b.pistas) || !b.pistas.every((p) => typeof p==='string' && p.trim())) {
-    return res.status(400).json({ error:'dato_invalido', campo:'pistas' });
-  }
-  if(!validarDatos(b.datos)) return res.status(400).json({ error:'dato_invalido', campo:'datos' });
-
-  try{
-    const row = await conSesion(req.perfil.id, async c=>{
-      // JSON.stringify explícito en AMBOS — no alcanza con pasar el objeto/
-      // array de JS tal cual: el driver `pg` convierte un Array JS en la
-      // sintaxis de ARRAY nativo de Postgres ("{a,b}", no JSON), y eso
-      // rompe una columna jsonb con "Expected ':', but found ','" (probado
-      // contra Postgres real). Un objeto plano sí lo serializa bien solo,
-      // pero se deja explícito en los dos para no depender de esa asimetría.
-      const q = await c.query(
-        `UPDATE estaciones SET titulo=$1, pilar=$2, narrativa=$3, reto=$4, datos=$5, pistas=$6, feedback_ok=$7
-         WHERE id=$8 RETURNING *`,
-        [b.titulo.trim(), b.pilar.trim(), b.narrativa.trim(), b.reto.trim(), JSON.stringify(b.datos), JSON.stringify(b.pistas), b.feedback_ok.trim(), id]
-      );
-      return q.rows[0];
-    });
-    if(!row) return res.status(404).json({ error:'no_encontrada' });
-    res.json(row);
-  }catch(e){ console.error(e); res.status(500).json({ error:'error_interno' }); }
-});
+// El editor de contenido (GET/PUT estaciones, validadores) se movió a
+// srv/rutas/contenido.js en P4 (plan-motor-misiones.md): ahora las salas
+// pertenecen a una misión (mision_id, orden), no son 5 fijas globales.
 
 router.post('/anonimizar/:sesion', async (req,res)=>{
   if(!req.perfil) return res.status(401).json({ error:'no_autorizado' });

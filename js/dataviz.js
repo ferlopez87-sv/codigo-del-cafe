@@ -1,15 +1,22 @@
-// _src/js/dataviz.js — dataviz (ct-e2, ct-e3) + fe-components
-// Dueño: dataviz — Vanilla ES module, SVG inline sin librerías
-// CONTRACT §16.2: E2 (87% verde / 13% resto, rango 85-90) y E3 (US$4.00 reparto)
-// 2026-08-28: cambio de barra 100%/apilada a gráfico de pastel (pedido de
-// Fernando) — mismos datos y mismos requisitos de accesibilidad, solo
-// cambia la forma. Reqs sin tocar: role=img, <title>/<desc>, tabla
-// fallback en <details>, color no es único portador (etiqueta texto en
-// cada porción, no solo el relleno).
-// Solo usa textContent/createElement, nunca innerHTML con datos dinámicos para sanitización §14.4
-// Colores con tokens: --color-exito, --color-acento, bordes sutiles; fondo oscuro expediente #0f1410
+// _src/js/dataviz.js — dataviz (motor de gráficos genérico)
+// Dueño: Frontend Escape Room — P2. Vanilla ES module, SVG inline sin librerías.
+// CONTRACT §16.2 / plan-motor-misiones.md §1.6: dibuja desde estaciones.visual
+// (dato editable), nunca desde constantes cableadas por sala o por id.
+// Solo usa textContent/createElement/createElementNS — nunca innerHTML con
+// datos dinámicos (§14.4).
+//
+// Dos lecciones del proyecto que este renderer conserva (CLAUDE.md, 2026-08-28):
+//  1. Para porciones angostas o de bisectriz lateral (~90°/270°), línea líder
+//     externa por defecto, no etiqueta adentro. Una porción "grande" por
+//     ángulo puede no tener espacio horizontal si su bisectriz apunta al
+//     costado — el ancho disponible depende de la orientación, no solo de
+//     la amplitud. Verificar con recorte 2× del SVG y getBBox() contra el
+//     viewBox, no con un vistazo al screenshot.
+//  2. Todo elemento que el JS agrega al DOM necesita su CSS explícito en el
+//     <style> inline de la página. styles.css (74 KB) está muerto.
 
 const NS = 'http://www.w3.org/2000/svg';
+let _contadorGrafico = 0;
 
 function _svgEl(tag, attrs) {
   const el = document.createElementNS(NS, tag);
@@ -23,15 +30,11 @@ function _mk(tag, text) {
   return el;
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Geometría de pastel — 0° = arriba (12 en punto), crece en sentido horario.
-// ─────────────────────────────────────────────────────────────────────
 function _polar(cx, cy, r, angleDeg) {
   const rad = (angleDeg * Math.PI) / 180;
   return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
 }
 
-// Porción completa (del centro al borde y de vuelta) — para las tajadas del pastel.
 function _sectorPath(cx, cy, r, startAngle, endAngle) {
   const s = _polar(cx, cy, r, startAngle);
   const e = _polar(cx, cy, r, endAngle);
@@ -47,298 +50,256 @@ function _arcPath(cx, cy, r, startAngle, endAngle) {
   return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// E2 — Huella hídrica: pastel de 2 porciones, 87% verde / 13% resto,
-// con un corchete sobre el borde marcando el rango aceptado 85–90%.
-// ─────────────────────────────────────────────────────────────────────
-export function crearGraficoE2() {
-  const wrap = _mk('div');
-  wrap.className = 'dataviz dataviz--e2';
-  wrap.setAttribute('data-dataviz', 'e2');
+// Paleta categórica fija, pensada para el fondo oscuro del expediente
+// (#0f1410). El color se asigna por índice de serie, no por contenido: el
+// contrato §1.6 no trae un campo de color, así que no hay forma de
+// reproducir un cableado semántico por sala sin volver a un preset — eso es
+// justo lo que este paquete retira.
+const PALETTE = ['#34c266', '#d99a2b', '#5b9bd9', '#c2607a', '#8a6fd1', '#d9a441', '#4fb8c4', '#c9a86a'];
 
-  const cx = 250, cy = 200, r = 118;
-  const pctVerde = 87;
-  const angVerde = pctVerde * 3.6; // 313.2°
-  const ang85 = 85 * 3.6, ang90 = 90 * 3.6;
+function _colorSerie(i) {
+  return PALETTE[i % PALETTE.length];
+}
 
-  const svg = _svgEl('svg', {
-    role: 'img',
-    'aria-labelledby': 'dataviz-e2-title dataviz-e2-desc',
-    viewBox: '0 0 500 430',
-    preserveAspectRatio: 'xMidYMid meet',
-    width: '100%',
-    height: 'auto',
+function _textoContraste(hex) {
+  const c = String(hex).replace('#', '');
+  const r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.55 ? '#0f1410' : '#ede9e3';
+}
+
+function _formatoValor(valor, unidad) {
+  const n = Number(valor) || 0;
+  if (unidad === '%') return `${Number(n.toFixed(2))}%`;
+  if (unidad) {
+    // 3 decimales (hay valores de sub-centavo, ej. 0.175) y se recorta el
+    // último si es 0, para no mostrar "0.400" cuando "0.40" alcanza. Usar
+    // toFixed(2) de entrada perdía precisión real: (0.175).toFixed(2) da
+    // "0.17" por representación binaria de punto flotante.
+    let s = n.toFixed(3);
+    if (s.endsWith('0')) s = s.slice(0, -1);
+    return `${unidad}${s}`;
+  }
+  return String(n);
+}
+
+function _anchoEstimado(texto, tamPx) {
+  return String(texto ?? '').length * tamPx * 0.62;
+}
+
+// Envuelve texto libre (etiqueta de serie, longitud arbitraria del editor)
+// en líneas de a lo sumo `maxChars`, para que una etiqueta larga no se
+// salga del viewBox en vez de recortarse a ciegas.
+function _envolverTexto(texto, maxChars) {
+  const palabras = String(texto ?? '').split(/\s+/).filter(Boolean);
+  const lineas = [];
+  let actual = '';
+  palabras.forEach((p) => {
+    const cand = actual ? `${actual} ${p}` : p;
+    if (cand.length > maxChars && actual) {
+      lineas.push(actual);
+      actual = p;
+    } else {
+      actual = cand;
+    }
   });
+  if (actual) lineas.push(actual);
+  return lineas.length ? lineas : [''];
+}
 
-  const title = _svgEl('title', { id: 'dataviz-e2-title' });
-  title.textContent = 'Huella hídrica: 87% agua verde (lluvia) y 13% agua azul y gris';
-  const desc = _svgEl('desc', { id: 'dataviz-e2-desc' });
-  desc.textContent = 'Gráfico de pastel de dos porciones. La porción verde cubre 87% del círculo y representa agua de lluvia. La porción oscura cubre el 13% restante y representa agua azul y gris. Un corchete sobre el borde marca el rango aceptado de 85 a 90%, indicando que la respuesta correcta está dentro de ese intervalo. Cada porción lleva etiqueta de texto; el color no es el único portador de significado.';
-  svg.appendChild(title);
-  svg.appendChild(desc);
-
-  // Porciones
-  svg.appendChild(_svgEl('path', { d: _sectorPath(cx, cy, r, 0, angVerde), fill: '#34c266', stroke: '#0f1410', 'stroke-width': 1.5 }));
-  svg.appendChild(_svgEl('path', { d: _sectorPath(cx, cy, r, angVerde, 360), fill: '#3d4640', stroke: '#0f1410', 'stroke-width': 1.5 }));
-  // Borde exterior sutil
-  svg.appendChild(_svgEl('circle', { cx, cy, r, fill: 'none', stroke: '#2e3430', 'stroke-width': 1 }));
-
-  // Etiqueta dentro de la porción verde (texto oscuro sobre verde — contraste AAA)
-  const midVerde = angVerde / 2;
-  const pVerde = _polar(cx, cy, r * 0.6, midVerde);
-  const tVerde = _svgEl('text', { x: pVerde.x.toFixed(2), y: (pVerde.y - 6).toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace', 'font-size': 22, 'font-weight': 700, fill: '#0f1410' });
-  tVerde.textContent = '87%';
-  svg.appendChild(tVerde);
-  const tVerde2 = _svgEl('text', { x: pVerde.x.toFixed(2), y: (pVerde.y + 14).toFixed(2), 'text-anchor': 'middle', 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 12, 'font-weight': 600, fill: '#0f1410' });
-  tVerde2.textContent = 'agua verde (lluvia)';
-  svg.appendChild(tVerde2);
-
-  // Etiqueta dentro de la porción resto (texto claro sobre gris oscuro)
-  const midResto = angVerde + (360 - angVerde) / 2;
-  const pResto = _polar(cx, cy, r * 0.72, midResto);
-  const tResto = _svgEl('text', { x: pResto.x.toFixed(2), y: (pResto.y - 3).toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace', 'font-size': 15, 'font-weight': 700, fill: '#ede9e3' });
-  tResto.textContent = '13%';
-  svg.appendChild(tResto);
-  const tResto2 = _svgEl('text', { x: pResto.x.toFixed(2), y: (pResto.y + 12).toFixed(2), 'text-anchor': 'middle', 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 9, fill: '#c2beba' });
-  tResto2.textContent = 'azul+gris';
-  svg.appendChild(tResto2);
-
-  // Corchete de rango aceptado 85–90%, sobre el borde exterior
-  const rBracket = r + 16;
-  svg.appendChild(_svgEl('path', { d: _arcPath(cx, cy, rBracket, ang85, ang90), fill: 'none', stroke: '#d99a2b', 'stroke-width': 2, 'stroke-linecap': 'round' }));
-  const p85in = _polar(cx, cy, r, ang85), p85out = _polar(cx, cy, rBracket, ang85);
-  const p90in = _polar(cx, cy, r, ang90), p90out = _polar(cx, cy, rBracket, ang90);
-  svg.appendChild(_svgEl('line', { x1: p85in.x.toFixed(2), y1: p85in.y.toFixed(2), x2: p85out.x.toFixed(2), y2: p85out.y.toFixed(2), stroke: '#d99a2b', 'stroke-width': 1.5 }));
-  svg.appendChild(_svgEl('line', { x1: p90in.x.toFixed(2), y1: p90in.y.toFixed(2), x2: p90out.x.toFixed(2), y2: p90out.y.toFixed(2), stroke: '#d99a2b', 'stroke-width': 1.5 }));
-  const midRango = (ang85 + ang90) / 2;
-  const pLabel = _polar(cx, cy, r + 55, midRango);
-  const tRango = _svgEl('text', { x: pLabel.x.toFixed(2), y: pLabel.y.toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, SFMono-Regular, monospace', 'font-size': 12, 'font-weight': 600, fill: '#d99a2b', 'letter-spacing': '0.03em' });
-  tRango.textContent = 'rango aceptado 85–90%';
-  svg.appendChild(tRango);
-
-  // Leyenda inferior accesible (texto, no solo color)
-  const legend = _svgEl('g', { 'aria-hidden': 'true' });
-  legend.appendChild(_svgEl('circle', { cx: 40, cy: 372, r: 6, fill: '#34c266', stroke: '#0f1410', 'stroke-width': 1 }));
-  const lg1 = _svgEl('text', { x: 52, y: 376, 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 13, fill: '#ede9e3' });
-  lg1.textContent = 'Agua verde (lluvia) — 87%';
-  legend.appendChild(lg1);
-  legend.appendChild(_svgEl('circle', { cx: 40, cy: 398, r: 6, fill: '#3d4640', stroke: '#ede9e3', 'stroke-width': 1 }));
-  const lg2 = _svgEl('text', { x: 52, y: 402, 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 13, fill: '#ede9e3' });
-  lg2.textContent = 'Agua azul + gris — 13%';
-  legend.appendChild(lg2);
-  legend.appendChild(_svgEl('rect', { x: 40, y: 414, width: 16, height: 12, rx: 2, fill: 'none', stroke: '#d99a2b', 'stroke-width': 1.5 }));
-  const lg3 = _svgEl('text', { x: 64, y: 424, 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 13, fill: '#d99a2b' });
-  lg3.textContent = 'Rango aceptado 85–90%';
-  legend.appendChild(lg3);
-  svg.appendChild(legend);
-
-  wrap.appendChild(svg);
-
-  // Tabla fallback en <details> — accesible, datos idénticos al pastel
-  const details = _mk('details');
-  const summary = _mk('summary', 'Ver datos en tabla');
-  summary.setAttribute('aria-label', 'Ver datos de huella hídrica en tabla');
-  details.appendChild(summary);
-  const table = _mk('table');
-  table.setAttribute('aria-label', 'Huella hídrica por tipo de agua');
-  const cap = _mk('caption', 'Huella hídrica — distribución porcentual');
-  cap.style.textAlign = 'left';
-  cap.style.fontWeight = '600';
-  table.appendChild(cap);
-  const thead = _mk('thead');
-  const trh = _mk('tr');
-  ['Tipo de agua', 'Porcentaje', 'Rango aceptado'].forEach((h) => {
-    const th = _mk('th', h);
-    th.setAttribute('scope', 'col');
-    trh.appendChild(th);
-  });
-  thead.appendChild(trh);
-  table.appendChild(thead);
-  const tbody = _mk('tbody');
-  [
-    ['Agua verde (lluvia)', '87%', '85–90% ✓'],
-    ['Agua azul + gris', '13%', '—'],
-    ['Total', '100%', '—'],
-  ].forEach(([a, b, c]) => {
-    const tr = _mk('tr');
-    tr.appendChild(_mk('td', a));
-    tr.appendChild(_mk('td', b));
-    tr.appendChild(_mk('td', c));
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  details.appendChild(table);
-  const note = _mk('p', 'Nota: 87% es agua de lluvia, no “impacto cero”. El rango 85–90% se acepta como correcto.');
-  note.className = 'campo__ayuda';
-  note.style.marginTop = '0.5rem';
-  details.appendChild(note);
-  wrap.appendChild(details);
-
-  return wrap;
+// Arma las líneas de una etiqueta externa (nombre + valor/nota), envolviendo
+// cada bloque por separado — la nota es dato libre del editor y puede ser
+// tan larga como la etiqueta.
+function _lineasEtiquetaExterna(etiqueta, principal, nota, color) {
+  const lineaValor = nota ? `${principal} · ${nota}` : principal;
+  return [
+    ..._envolverTexto(etiqueta || '', 20).map((texto) => ({ texto, fill: color, peso: 700, tam: 11 })),
+    ..._envolverTexto(lineaValor, 22).map((texto) => ({ texto, fill: '#ede9e3', peso: 400, tam: 10 })),
+  ];
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// E3 — Reparto US$4.00: pastel de 4 porciones (0.175 / 0.40 / 1.10 / 2.325).
-// La porción de la caficultora es angularmente diminuta (15.75°): lleva
-// etiqueta externa con línea líder, igual espíritu que la barra original.
+// Pastel — distribución angular y decisión de etiqueta interna/externa
 // ─────────────────────────────────────────────────────────────────────
-export function crearGraficoE3() {
-  const wrap = _mk('div');
-  wrap.className = 'dataviz dataviz--e3';
-  wrap.setAttribute('data-dataviz', 'e3');
+function _totalSerie(series) {
+  return series.reduce((s, x) => s + Math.abs(Number(x.valor) || 0), 0) || 1;
+}
 
-  const total = 4.0;
-  const segmentosBase = [
-    { id: 'caficultora', label: 'Caficultora', valor: 0.175, fill: '#d99a2b', textColor: '#0f1410' },
-    { id: 'procesamiento', label: 'Procesamiento', valor: 0.40, fill: '#34c266', textColor: '#0f1410' },
-    { id: 'tostado', label: 'Tostado y logística', valor: 1.10, fill: '#d9a441', textColor: '#0f1410' },
-    { id: 'cafeteria', label: 'Cafetería', valor: 2.325, fill: '#2e3430', textColor: '#ede9e3' },
-  ];
-  let anguloActual = 0;
-  const segmentos = segmentosBase.map((seg) => {
-    const pct = (seg.valor / total) * 100;
-    const angInicio = anguloActual;
+function _distribuirSectores(series) {
+  const total = _totalSerie(series);
+  let ang = 0;
+  return series.map((s, i) => {
+    const valor = Number(s.valor) || 0;
+    const pct = (valor / total) * 100;
     const angAmplitud = (pct / 100) * 360;
-    anguloActual += angAmplitud;
-    return { ...seg, pct, angInicio, angFin: anguloActual, angAmplitud };
+    const angInicio = ang;
+    const angFin = ang + angAmplitud;
+    ang = angFin;
+    return { ...s, i, valor, pct, angInicio, angFin, angAmplitud, mid: (angInicio + angFin) / 2, color: _colorSerie(i) };
   });
+}
 
-  const cx = 250, cy = 200, r = 110;
+// Lección 2026-08-28: una porción angosta, o una porción de bisectriz
+// lateral (~90°/270°) aunque sea angularmente grande, no tiene espacio
+// horizontal para su etiqueta — el ancho disponible depende de la
+// orientación de la bisectriz respecto del eje vertical, no solo de la
+// amplitud del ángulo. `factorVertical` cae a 0 cuanto más lateral apunta.
+function _necesitaExterna(sec, r, unidad) {
+  if (sec.angAmplitud < 20) return true;
+  const midRad = (sec.mid * Math.PI) / 180;
+  const factorVertical = Math.abs(Math.cos(midRad));
+  // Semiángulo capado a 90°: una porción de más de 180° (ej. 313°) no es más
+  // angosta que una de 180° en su bisectriz — sin el tope, sin(halfRad) cae
+  // otra vez para halfRad>90° y el cálculo confunde "casi todo el círculo"
+  // con "porción angosta". Solo la etiqueta PRINCIPAL entra en esta cuenta:
+  // la nota (más larga, opcional) se acomoda aparte una vez que se sabe que
+  // hay espacio para el bloque.
+  const halfRad = Math.min(((sec.angAmplitud / 2) * Math.PI) / 180, Math.PI / 2);
+  const radioEtiqueta = r * 0.62;
+  // La penalidad por bisectriz lateral (factorVertical bajo) solo aplica a
+  // porciones de amplitud moderada, que es donde de verdad falta ancho en
+  // una sola dirección (ej. 99°, ver Sala del Dinero). Una porción muy
+  // grande (>140°) ya tiene espacio de sobra cerca de su bisectriz en
+  // cualquier orientación — sin este atenuante, una porción de 209° podía
+  // salir "angosta" solo por apuntar hacia el costado.
+  const pesoAmplitud = Math.min(1, sec.angAmplitud / 140);
+  const factorEfectivo = factorVertical + (1 - factorVertical) * pesoAmplitud;
+  const anchoDisponible = 2 * radioEtiqueta * Math.sin(halfRad) * (0.3 + 0.7 * factorEfectivo);
+  const principal = _formatoValor(sec.valor, unidad);
+  const anchoTexto = _anchoEstimado(principal, 13);
+  return anchoDisponible < anchoTexto + 8;
+}
 
-  const svg = _svgEl('svg', {
-    role: 'img',
-    'aria-labelledby': 'dataviz-e3-title dataviz-e3-desc',
-    viewBox: '0 0 530 450',
-    preserveAspectRatio: 'xMidYMid meet',
-    width: '100%',
-    height: 'auto',
-  });
-  const title = _svgEl('title', { id: 'dataviz-e3-title' });
-  title.textContent = 'Reparto de US$4.00: la caficultora recibe US$0.175 (4.4%)';
-  const desc = _svgEl('desc', { id: 'dataviz-e3-desc' });
-  desc.textContent = 'Gráfico de pastel de cuatro porciones sobre US$4.00. En sentido horario desde arriba: caficultora 0.175 dólares (4.4%, porción ínfima ámbar con etiqueta externa), procesamiento 0.40 (10%), tostado y logística 1.10 (27.5%), cafetería 2.325 (58.1%, porción mayor gris oscuro). La desproporción es el aprendizaje y se ve antes de leerse. Cada porción lleva etiqueta de texto con valor y porcentaje; el color no es el único portador.';
-  svg.appendChild(title);
-  svg.appendChild(desc);
-
-  // Porciones
-  segmentos.forEach((seg) => {
-    svg.appendChild(_svgEl('path', { d: _sectorPath(cx, cy, r, seg.angInicio, seg.angFin), fill: seg.fill, stroke: '#0f1410', 'stroke-width': 1.5 }));
-  });
-  svg.appendChild(_svgEl('circle', { cx, cy, r, fill: 'none', stroke: '#2e3430', 'stroke-width': 1 }));
-
-  // Etiqueta externa con línea líder — para porciones angostas donde ningún
-  // texto entra adentro sin desbordar hacia la porción vecina (caficultora
-  // 15.75°, procesamiento 36°). `leaderLen` distinto por segmento para que
-  // los dos bloques de texto (ambos cerca de la parte superior del pastel)
-  // no se pisen entre sí.
-  function _etiquetaExterna(seg, mid, leaderLen, colorNombre, lado, nombre) {
-    const shortLabel = `US$${seg.valor.toFixed(2)} · ${seg.pct.toFixed(1)}%`;
-    const rimPt = _polar(cx, cy, r, mid);
-    const leadEnd = _polar(cx, cy, r + leaderLen, mid);
-    svg.appendChild(_svgEl('line', { x1: rimPt.x.toFixed(2), y1: rimPt.y.toFixed(2), x2: leadEnd.x.toFixed(2), y2: leadEnd.y.toFixed(2), stroke: colorNombre, 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
-    svg.appendChild(_svgEl('circle', { cx: rimPt.x.toFixed(2), cy: rimPt.y.toFixed(2), r: 3, fill: colorNombre, stroke: '#0f1410', 'stroke-width': 1 }));
-    // 'arriba': porciones cuya bisectriz apunta hacia arriba (caficultora,
-    // procesamiento) — la línea líder gana harta separación vertical del
-    // aro, así que el bloque de texto centrado y apilado encima funciona.
-    // 'derecha': bisectriz casi horizontal (tostado, ~101°) — ahí la línea
-    // apenas gana separación vertical (su componente es casi todo
-    // horizontal), así que centrar el texto lo deja pegado al marcador;
-    // en vez de eso el texto arranca a la derecha del punto, alineado a
-    // la izquierda, apilado hacia abajo. Encontrado con Playwright contra
-    // el juego real — ver progress.md 2026-08-28.
-    let ax, ay1, ay2, anchor;
-    if (lado === 'derecha') {
-      anchor = 'start';
-      ax = leadEnd.x + 8;
-      ay1 = leadEnd.y - 2;
-      ay2 = leadEnd.y + 12;
-    } else {
-      anchor = 'middle';
-      ax = leadEnd.x;
-      ay1 = leadEnd.y - 8;
-      ay2 = leadEnd.y - 20;
-    }
-    const t1 = _svgEl('text', { x: ax.toFixed(2), y: ay1.toFixed(2), 'text-anchor': anchor, 'font-family': 'ui-monospace, monospace', 'font-size': 11, 'font-weight': 700, fill: colorNombre });
-    t1.textContent = nombre || seg.label;
-    svg.appendChild(t1);
-    const t2 = _svgEl('text', { x: ax.toFixed(2), y: ay2.toFixed(2), 'text-anchor': anchor, 'font-family': 'ui-monospace, monospace', 'font-size': 10, fill: '#ede9e3' });
-    t2.textContent = shortLabel;
+function _etiquetaInterna(svg, cx, cy, r, sec, unidad) {
+  const radioEtiqueta = r * (sec.angAmplitud > 150 ? 0.5 : 0.65);
+  const p = _polar(cx, cy, radioEtiqueta, sec.mid);
+  const fill = _textoContraste(sec.color);
+  const principal = _formatoValor(sec.valor, unidad);
+  const nota = sec.nota ? String(sec.nota) : '';
+  // Apilado vertical simple, con espacio de sobra entre las dos líneas — la
+  // separación puramente radial (misma dirección, distinto radio) no sirve
+  // en bisectrices laterales: ahí el desplazamiento cae más en x que en y,
+  // y las cajas de texto (centradas, ambas anchas) se siguen solapando.
+  const t1 = _svgEl('text', { x: p.x.toFixed(2), y: (p.y - (nota ? 7 : 0)).toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace', 'font-size': 13, 'font-weight': 700, fill });
+  t1.textContent = principal;
+  svg.appendChild(t1);
+  if (nota) {
+    const t2 = _svgEl('text', { x: p.x.toFixed(2), y: (p.y + 16).toFixed(2), 'text-anchor': 'middle', 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 10, fill });
+    t2.textContent = nota;
     svg.appendChild(t2);
   }
+}
 
-  segmentos.forEach((seg) => {
-    const mid = (seg.angInicio + seg.angFin) / 2;
-    if (seg.id === 'caficultora') {
-      _etiquetaExterna(seg, mid, 55, '#d99a2b', 'arriba');
-    } else if (seg.id === 'procesamiento') {
-      _etiquetaExterna(seg, mid, 42, '#34c266', 'arriba');
-    } else if (seg.id === 'tostado') {
-      // 2026-08-28: probado adentro (verificado con Playwright contra el
-      // juego real) — a cualquier radio, "Tostado y logística"/"Tostado/
-      // logística" se salía de su propia porción hacia la de cafetería, y
-      // ahí el texto oscuro (pensado para leerse sobre ámbar) quedaba casi
-      // invisible sobre el gris oscuro vecino. Con 99° de amplitud parece
-      // "grande", pero su bisectriz apunta casi horizontal (~101°) y el
-      // texto centrado ahí se desborda igual. Línea líder como caficultora/
-      // procesamiento, pero hacia la derecha del punto (ver 'derecha' en
-      // _etiquetaExterna) — apilar el texto arriba del punto como a esas
-      // dos no sirve acá porque la bisectriz casi horizontal no gana
-      // separación vertical del aro, y el texto queda pegado al marcador.
-      _etiquetaExterna(seg, mid, 30, '#d9a441', 'derecha', 'Tostado/logística');
+// Etiqueta externa con línea líder. `factorVertical` decide si el bloque de
+// texto se apila arriba/abajo del punto (bisectriz cerca de vertical) o se
+// pega al costado (bisectriz lateral) — mismo criterio que costó encontrar
+// en Sala del Dinero (99° de amplitud, bisectriz ~101°: "grande" pero sin
+// espacio horizontal porque apunta casi al costado).
+function _etiquetaExterna(svg, cx, cy, r, sec, unidad) {
+  const midRad = (sec.mid * Math.PI) / 180;
+  const factorVertical = Math.abs(Math.cos(midRad));
+  // Dos porciones angostas vecinas (bisectrices cercanas entre sí) que
+  // terminan las dos afuera se pisan si usan el mismo largo de línea líder
+  // — se alterna por índice de serie para separarlas radialmente, mismo
+  // espíritu que el offset manual que costó encontrar en Sala del Dinero.
+  const leaderLen = 32 + Math.max(0, 20 - sec.angAmplitud) + (sec.i % 2) * 20;
+  const rimPt = _polar(cx, cy, r, sec.mid);
+  const leadEnd = _polar(cx, cy, r + leaderLen, sec.mid);
+  svg.appendChild(_svgEl('line', { x1: rimPt.x.toFixed(2), y1: rimPt.y.toFixed(2), x2: leadEnd.x.toFixed(2), y2: leadEnd.y.toFixed(2), stroke: sec.color, 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
+  svg.appendChild(_svgEl('circle', { cx: rimPt.x.toFixed(2), cy: rimPt.y.toFixed(2), r: 3, fill: sec.color, stroke: '#0f1410', 'stroke-width': 1 }));
+
+  const principal = _formatoValor(sec.valor, unidad);
+  const lineHeight = 14;
+
+  // Ángulo con signo, 0 = arriba, -180..180: define hacia qué lado del eje
+  // vertical cae la porción — dos porciones vecinas de bisectriz casi
+  // vertical (ej. 8° y 34°, ambas "arriba") igual quedan a lados
+  // ligeramente distintos del eje, así que abanicarlas horizontalmente en
+  // esa dirección (en vez de centrarlas a las dos en el mismo x) es lo que
+  // evita que sus bloques de texto se encimen.
+  const signedMid = sec.mid > 180 ? sec.mid - 360 : sec.mid;
+
+  let anchor, ax, crecerHaciaArriba;
+  if (factorVertical >= 0.5) {
+    crecerHaciaArriba = Math.abs(signedMid) < 90;
+    if (Math.abs(signedMid) < 8) {
+      anchor = 'middle';
+      ax = leadEnd.x;
     } else {
-      // Cafetería: 209° de amplitud, la más grande — sí entra completa
-      // adentro sin desbordar (verificado visualmente).
-      const labelR = r * 0.6;
-      const p = _polar(cx, cy, labelR, mid);
-      const t1 = _svgEl('text', { x: p.x.toFixed(2), y: (p.y - 6).toFixed(2), 'text-anchor': 'middle', 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 12, 'font-weight': 700, fill: seg.textColor });
-      t1.textContent = seg.label;
-      svg.appendChild(t1);
-      const t2 = _svgEl('text', { x: p.x.toFixed(2), y: (p.y + 9).toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, monospace', 'font-size': 9, fill: seg.textColor, opacity: 0.9 });
-      t2.textContent = `US$${seg.valor.toFixed(2)} · ${seg.pct.toFixed(1)}%`;
-      svg.appendChild(t2);
+      anchor = signedMid > 0 ? 'start' : 'end';
+      ax = anchor === 'start' ? leadEnd.x + 6 : leadEnd.x - 6;
     }
+  } else {
+    // Bisectriz lateral (~90°/270°): el texto se pega al costado del punto,
+    // alineado hacia afuera, siempre apilado hacia abajo — apilarlo hacia
+    // arriba ahí no gana separación vertical del aro (ver nota en
+    // _necesitaExterna).
+    anchor = Math.sin(midRad) >= 0 ? 'start' : 'end';
+    ax = anchor === 'start' ? leadEnd.x + 8 : leadEnd.x - 8;
+    crecerHaciaArriba = false;
+  }
+
+  const lineas = _lineasEtiquetaExterna(sec.etiqueta, principal, sec.nota, sec.color);
+
+  const y0 = crecerHaciaArriba ? leadEnd.y - lineHeight * lineas.length : leadEnd.y + lineHeight * 0.4;
+  lineas.forEach((linea, idx) => {
+    const y = y0 + lineHeight * (idx + 1);
+    const t = _svgEl('text', { x: ax.toFixed(2), y: y.toFixed(2), 'text-anchor': anchor, 'font-family': 'ui-monospace, monospace', 'font-size': linea.tam, 'font-weight': linea.peso, fill: linea.fill });
+    t.textContent = linea.texto;
+    svg.appendChild(t);
   });
+}
 
-  // Anotación del aprendizaje — visible siempre, no solo dentro del <details>
-  const note = _svgEl('text', { x: 250, y: 332, 'text-anchor': 'middle', 'font-family': '-apple-system, sans-serif', 'font-size': 12, fill: '#ede9e3', 'font-style': 'italic' });
-  note.textContent = 'La porción ámbar (arriba) es la caficultora — 4.4% del precio final.';
-  svg.appendChild(note);
-  const note2 = _svgEl('text', { x: 250, y: 348, 'text-anchor': 'middle', 'font-family': '-apple-system, sans-serif', 'font-size': 11, fill: '#9a9590' });
-  note2.textContent = 'Se ve antes de leerse: esa es la desproporción.';
-  svg.appendChild(note2);
+// `visual.rango` (plan-motor-misiones.md §1.6, agregado 2026-09-22): corchete
+// sobre el borde marcando un intervalo aceptado, no decoración — comunica
+// que la respuesta correcta es un rango, no un número exacto (lo que evalúa
+// la Sala Verde). min/max están en la misma escala que `series.valor`, así
+// que se convierten a ángulo con el mismo `total` que reparte las porciones.
+function _dibujarRango(svg, cx, cy, r, rango, total, unidad) {
+  if (!rango || rango.min === undefined || rango.max === undefined) return;
+  const angMin = (Number(rango.min) / total) * 360;
+  const angMax = (Number(rango.max) / total) * 360;
+  const rBracket = r + 16;
+  svg.appendChild(_svgEl('path', { d: _arcPath(cx, cy, rBracket, angMin, angMax), fill: 'none', stroke: '#d99a2b', 'stroke-width': 2, 'stroke-linecap': 'round' }));
+  const pMinIn = _polar(cx, cy, r, angMin), pMinOut = _polar(cx, cy, rBracket, angMin);
+  const pMaxIn = _polar(cx, cy, r, angMax), pMaxOut = _polar(cx, cy, rBracket, angMax);
+  svg.appendChild(_svgEl('line', { x1: pMinIn.x.toFixed(2), y1: pMinIn.y.toFixed(2), x2: pMinOut.x.toFixed(2), y2: pMinOut.y.toFixed(2), stroke: '#d99a2b', 'stroke-width': 1.5 }));
+  svg.appendChild(_svgEl('line', { x1: pMaxIn.x.toFixed(2), y1: pMaxIn.y.toFixed(2), x2: pMaxOut.x.toFixed(2), y2: pMaxOut.y.toFixed(2), stroke: '#d99a2b', 'stroke-width': 1.5 }));
+  const midAng = (angMin + angMax) / 2;
+  const pLabel = _polar(cx, cy, r + 55, midAng);
+  const rangoTexto = unidad === '%' ? `${rango.min}–${rango.max}%` : unidad ? `${unidad}${rango.min}–${rango.max}` : `${rango.min}–${rango.max}`;
+  const t = _svgEl('text', { x: pLabel.x.toFixed(2), y: pLabel.y.toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, monospace', 'font-size': 12, 'font-weight': 600, fill: '#d99a2b', 'letter-spacing': '0.03em' });
+  t.textContent = `${rango.etiqueta || 'rango aceptado'} ${rangoTexto}`;
+  svg.appendChild(t);
+}
 
-  // Leyenda
-  const legend = _svgEl('g', { 'aria-hidden': 'true' });
-  const cols = [
-    { c: '#d99a2b', t: 'Caficultora 4.4%' },
-    { c: '#34c266', t: 'Procesamiento 10%' },
-    { c: '#d9a441', t: 'Tostado/logística 27.5%' },
-    { c: '#2e3430', t: 'Cafetería 58.1%', stroke: '#c2beba' },
-  ];
-  cols.forEach((col, i) => {
-    const y = 374 + i * 20;
-    legend.appendChild(_svgEl('rect', { x: 40, y, width: 14, height: 14, rx: 3, fill: col.c, stroke: col.stroke || '#0f1410', 'stroke-width': 1 }));
-    const lt = _svgEl('text', { x: 62, y: y + 11, 'font-family': '-apple-system, sans-serif', 'font-size': 12, fill: '#ede9e3' });
-    lt.textContent = col.t;
-    legend.appendChild(lt);
+function _leyendaPastel(svg, cx, cy, r, sectores, unidad, xIzq) {
+  const legendY0 = cy + r + 40;
+  sectores.forEach((s, i) => {
+    const y = legendY0 + i * 20;
+    svg.appendChild(_svgEl('rect', { x: xIzq, y: y - 10, width: 14, height: 14, rx: 3, fill: s.color, stroke: '#0f1410', 'stroke-width': 1 }));
+    const lt = _svgEl('text', { x: xIzq + 22, y, 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 12, fill: '#ede9e3' });
+    lt.textContent = `${s.etiqueta || ''} — ${_formatoValor(s.valor, unidad)}${s.nota ? ' (' + s.nota + ')' : ''}`;
+    svg.appendChild(lt);
   });
-  svg.appendChild(legend);
+}
 
-  wrap.appendChild(svg);
-
-  // Tabla fallback
+function _tabla(visual, filas, encabezados) {
   const details = _mk('details');
   const summary = _mk('summary', 'Ver datos en tabla');
+  summary.setAttribute('aria-label', `Ver datos de ${visual.titulo || 'este gráfico'} en tabla`);
   details.appendChild(summary);
   const table = _mk('table');
-  table.setAttribute('aria-label', 'Reparto de US$4.00 por eslabón');
-  const cap = _mk('caption', 'Reparto de US$4.00 — valor por eslabón');
-  cap.style.textAlign = 'left';
-  cap.style.fontWeight = '600';
-  table.appendChild(cap);
+  table.setAttribute('aria-label', visual.titulo || 'Datos del gráfico');
+  if (visual.titulo) {
+    const cap = _mk('caption', visual.titulo);
+    cap.style.textAlign = 'left';
+    cap.style.fontWeight = '600';
+    table.appendChild(cap);
+  }
   const thead = _mk('thead');
   const trh = _mk('tr');
-  ['Eslabón', 'US$', '% del precio final'].forEach((h) => {
+  encabezados.forEach((h) => {
     const th = _mk('th', h);
     th.setAttribute('scope', 'col');
     trh.appendChild(th);
@@ -346,38 +307,192 @@ export function crearGraficoE3() {
   thead.appendChild(trh);
   table.appendChild(thead);
   const tbody = _mk('tbody');
-  [
-    ['Caficultora', '0.175', '4.4%'],
-    ['Procesamiento', '0.40', '10.0%'],
-    ['Tostado y logística', '1.10', '27.5%'],
-    ['Cafetería', '2.325', '58.1%'],
-    ['Total', '4.00', '100%'],
-  ].forEach(([a, b, c]) => {
+  filas.forEach((fila) => {
     const tr = _mk('tr');
-    if (a === 'Caficultora') tr.style.fontWeight = '700';
-    tr.appendChild(_mk('td', a));
-    const td2 = _mk('td', b);
-    td2.style.fontFamily = 'ui-monospace, monospace';
-    td2.style.fontVariantNumeric = 'tabular-nums';
-    tr.appendChild(td2);
-    tr.appendChild(_mk('td', c));
+    fila.forEach((c) => tr.appendChild(_mk('td', c)));
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
   details.appendChild(table);
-  const p = _mk('p', 'Fuente: expediente CGC. Rango correcto para E3: 4–4.4% para la caficultora (el cálculo usa 0.175/4).');
-  p.className = 'campo__ayuda';
-  p.style.marginTop = '0.5rem';
-  details.appendChild(p);
-  wrap.appendChild(details);
+  if (visual.pie) {
+    const p = _mk('p', visual.pie);
+    p.className = 'campo__ayuda';
+    p.style.marginTop = '0.5rem';
+    details.appendChild(p);
+  }
+  return details;
+}
 
+function _crearPastel(visual, seriesRaw) {
+  const wrap = _mk('div');
+  wrap.className = 'dataviz dataviz--pastel';
+  wrap.setAttribute('data-dataviz', 'pastel');
+  const uid = 'dv' + (++_contadorGrafico);
+
+  const cx = 250, cy = 200, r = 118;
+  const sectores = _distribuirSectores(seriesRaw);
+  const alturaLeyenda = 24 + sectores.length * 20;
+  const alturaTotal = cy + r + 60 + alturaLeyenda;
+
+  const svg = _svgEl('svg', {
+    role: 'img',
+    'aria-labelledby': `${uid}-title ${uid}-desc`,
+    viewBox: `0 0 500 ${alturaTotal}`,
+    preserveAspectRatio: 'xMidYMid meet',
+    width: '100%',
+  });
+  // `height="auto"` como ATRIBUTO de presentación no es un <length> SVG
+  // válido (Chrome lo rechaza con error de consola, aunque renderiza igual
+  // por el fallback) — como propiedad CSS sí es válida y es lo que hace
+  // falta para que el alto siga al ancho según el aspect ratio del viewBox.
+  svg.style.height = 'auto';
+
+  const title = _svgEl('title', { id: `${uid}-title` });
+  title.textContent = visual.titulo || 'Gráfico de pastel';
+  const desc = _svgEl('desc', { id: `${uid}-desc` });
+  const partes = sectores.map((s) => `${s.etiqueta || 'serie'} ${_formatoValor(s.valor, visual.unidad)} (${s.pct.toFixed(1)}%)${s.nota ? ', ' + s.nota : ''}`);
+  desc.textContent = `Gráfico de pastel de ${sectores.length} porciones. ${partes.join('. ')}. Cada porción lleva etiqueta de texto; el color no es el único portador de significado.`;
+  svg.appendChild(title);
+  svg.appendChild(desc);
+
+  sectores.forEach((s) => {
+    svg.appendChild(_svgEl('path', { d: _sectorPath(cx, cy, r, s.angInicio, s.angFin), fill: s.color, stroke: '#0f1410', 'stroke-width': 1.5 }));
+  });
+  svg.appendChild(_svgEl('circle', { cx, cy, r, fill: 'none', stroke: '#2e3430', 'stroke-width': 1 }));
+
+  sectores.forEach((s) => {
+    if (_necesitaExterna(s, r, visual.unidad)) _etiquetaExterna(svg, cx, cy, r, s, visual.unidad);
+    else _etiquetaInterna(svg, cx, cy, r, s, visual.unidad);
+  });
+
+  if (visual.rango) _dibujarRango(svg, cx, cy, r, visual.rango, _totalSerie(seriesRaw), visual.unidad);
+
+  _leyendaPastel(svg, cx, cy, r, sectores, visual.unidad, 40);
+
+  wrap.appendChild(svg);
+  wrap.appendChild(_tabla(
+    visual,
+    sectores.map((s) => [s.etiqueta || '', _formatoValor(s.valor, visual.unidad), `${s.pct.toFixed(1)}%`, s.nota || '—']),
+    ['Serie', 'Valor', '% del total', 'Nota'],
+  ));
   return wrap;
 }
 
-// Helper para inyectar según id de estación (usado por render.js)
-export function inyectarDataviz(contenedor, estacionId) {
-  if (!contenedor) return;
-  const id = Number(estacionId);
-  if (id === 2) contenedor.prepend(crearGraficoE2());
-  else if (id === 3) contenedor.prepend(crearGraficoE3());
+// ─────────────────────────────────────────────────────────────────────
+// Barra apilada — sigue siendo tipo válido de §1.6 para misiones nuevas
+// aunque ninguna sala de CGC lo use hoy (las dos son pastel, §1.8.1).
+// ─────────────────────────────────────────────────────────────────────
+function _crearBarrasApiladas(visual, seriesRaw) {
+  const wrap = _mk('div');
+  wrap.className = 'dataviz dataviz--barras';
+  wrap.setAttribute('data-dataviz', 'barras_apiladas');
+  const uid = 'dv' + (++_contadorGrafico);
+
+  const total = seriesRaw.reduce((s, x) => s + Math.abs(Number(x.valor) || 0), 0) || 1;
+  const anchoTotal = 500;
+  const margenX = 30;
+  const anchoBarra = anchoTotal - margenX * 2;
+  const altoBarra = 60;
+  const yBarra = 90;
+
+  let x = margenX;
+  const segmentos = seriesRaw.map((s, i) => {
+    const valor = Number(s.valor) || 0;
+    const pct = (valor / total) * 100;
+    const w = (pct / 100) * anchoBarra;
+    const seg = { ...s, i, valor, pct, x, w, color: _colorSerie(i) };
+    x += w;
+    return seg;
+  });
+
+  const alturaLeyenda = 24 + segmentos.length * 20;
+  const alturaTotal = yBarra + altoBarra + 50 + alturaLeyenda;
+
+  const svg = _svgEl('svg', {
+    role: 'img',
+    'aria-labelledby': `${uid}-title ${uid}-desc`,
+    viewBox: `0 0 ${anchoTotal} ${alturaTotal}`,
+    preserveAspectRatio: 'xMidYMid meet',
+    width: '100%',
+  });
+  svg.style.height = 'auto'; // ver nota en _crearPastel — no es un atributo válido
+
+  const title = _svgEl('title', { id: `${uid}-title` });
+  title.textContent = visual.titulo || 'Gráfico de barra apilada';
+  const desc = _svgEl('desc', { id: `${uid}-desc` });
+  const partes = segmentos.map((s) => `${s.etiqueta || 'serie'} ${_formatoValor(s.valor, visual.unidad)} (${s.pct.toFixed(1)}%)${s.nota ? ', ' + s.nota : ''}`);
+  desc.textContent = `Barra apilada dividida en ${segmentos.length} segmentos, de izquierda a derecha: ${partes.join('; ')}. Cada segmento lleva etiqueta de texto; el color no es el único portador de significado.`;
+  svg.appendChild(title);
+  svg.appendChild(desc);
+
+  segmentos.forEach((s) => {
+    svg.appendChild(_svgEl('rect', { x: s.x.toFixed(2), y: yBarra, width: Math.max(s.w, 0.01).toFixed(2), height: altoBarra, fill: s.color, stroke: '#0f1410', 'stroke-width': 1 }));
+  });
+  svg.appendChild(_svgEl('rect', { x: margenX, y: yBarra, width: anchoBarra, height: altoBarra, fill: 'none', stroke: '#2e3430', 'stroke-width': 1 }));
+
+  // Mismo criterio de espacio disponible que en el pastel, medido en ancho
+  // de segmento en vez de ancho de cuerda angular: adentro si entra, si no,
+  // línea líder hacia arriba con el texto apilado.
+  segmentos.forEach((s) => {
+    const principal = _formatoValor(s.valor, visual.unidad);
+    const anchoTexto = Math.max(_anchoEstimado(principal, 12), _anchoEstimado(s.etiqueta || '', 11));
+    const cxSeg = s.x + s.w / 2;
+    if (s.w >= anchoTexto + 12) {
+      const fill = _textoContraste(s.color);
+      const t1 = _svgEl('text', { x: cxSeg.toFixed(2), y: (yBarra + altoBarra / 2 - 4).toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, monospace', 'font-size': 12, 'font-weight': 700, fill });
+      t1.textContent = principal;
+      svg.appendChild(t1);
+      const t2 = _svgEl('text', { x: cxSeg.toFixed(2), y: (yBarra + altoBarra / 2 + 12).toFixed(2), 'text-anchor': 'middle', 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 10, fill });
+      t2.textContent = s.etiqueta || '';
+      svg.appendChild(t2);
+    } else {
+      const leadEnd = yBarra - 24;
+      svg.appendChild(_svgEl('line', { x1: cxSeg.toFixed(2), y1: yBarra, x2: cxSeg.toFixed(2), y2: leadEnd, stroke: s.color, 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
+      svg.appendChild(_svgEl('circle', { cx: cxSeg.toFixed(2), cy: yBarra, r: 3, fill: s.color, stroke: '#0f1410', 'stroke-width': 1 }));
+      const lineHeight = 14;
+      const lineas = _lineasEtiquetaExterna(s.etiqueta, principal, s.nota, s.color);
+      const y0 = leadEnd - lineHeight * lineas.length;
+      // Segmentos cerca del borde del gráfico: el texto centrado en cxSeg
+      // puede salirse del viewBox aunque esté envuelto en líneas cortas —
+      // se recorta el x del texto (no el del marcador/línea líder) a un
+      // margen seguro.
+      const axTexto = Math.min(Math.max(cxSeg, margenX + 75), anchoTotal - margenX - 75);
+      lineas.forEach((linea, idx) => {
+        const y = y0 + lineHeight * (idx + 1);
+        const t = _svgEl('text', { x: axTexto.toFixed(2), y: y.toFixed(2), 'text-anchor': 'middle', 'font-family': 'ui-monospace, monospace', 'font-size': linea.tam, 'font-weight': linea.peso, fill: linea.fill });
+        t.textContent = linea.texto;
+        svg.appendChild(t);
+      });
+    }
+  });
+
+  const legendY0 = yBarra + altoBarra + 40;
+  segmentos.forEach((s, i) => {
+    const y = legendY0 + i * 20;
+    svg.appendChild(_svgEl('rect', { x: margenX, y: y - 10, width: 14, height: 14, rx: 3, fill: s.color, stroke: '#0f1410', 'stroke-width': 1 }));
+    const lt = _svgEl('text', { x: margenX + 22, y, 'font-family': '-apple-system, BlinkMacSystemFont, sans-serif', 'font-size': 12, fill: '#ede9e3' });
+    lt.textContent = `${s.etiqueta || ''} — ${_formatoValor(s.valor, visual.unidad)}${s.nota ? ' (' + s.nota + ')' : ''}`;
+    svg.appendChild(lt);
+  });
+
+  wrap.appendChild(svg);
+  wrap.appendChild(_tabla(
+    visual,
+    segmentos.map((s) => [s.etiqueta || '', _formatoValor(s.valor, visual.unidad), `${s.pct.toFixed(1)}%`, s.nota || '—']),
+    ['Segmento', 'Valor', '% del total', 'Nota'],
+  ));
+  return wrap;
+}
+
+// Público -----------------------------------------------------------------
+// Único punto de entrada. No hay presets por sala ni por id — todo sale de
+// `visual` (estaciones.visual, §1.6). El orquestador (js/juego.js, P3) es
+// quien decide cuándo llamarlo, con estacion.visual.
+export function crearGrafico(visual) {
+  if (!visual || !visual.tipo) return null;
+  const series = Array.isArray(visual.series) ? visual.series : [];
+  if (!series.length) return null;
+  if (visual.tipo === 'pastel') return _crearPastel(visual, series);
+  if (visual.tipo === 'barras_apiladas') return _crearBarrasApiladas(visual, series);
+  return null;
 }
