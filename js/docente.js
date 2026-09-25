@@ -502,7 +502,7 @@ function slugifyId(texto){
   return String(texto||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,24) || ('id_'+Math.random().toString(36).slice(2,6));
 }
 function sanitizarHtmlAcotado(html){
-  // Solo <b>, <i>, <ul>, <li> sin atributos. Todo lo demás se descarta
+  // Solo <b>, <i>, <ul>, <li>, <br> sin atributos. Todo lo demás se descarta
   // conservando su texto. Devuelve un DocumentFragment — NUNCA un string.
   //
   // Versión anterior serializaba el árbol ya limpio a texto (concatenando
@@ -520,7 +520,7 @@ function sanitizarHtmlAcotado(html){
   // pasar nunca más por texto.
   const tpl = document.createElement('template');
   tpl.innerHTML = String(html||'');
-  const permitidos = new Set(['B','I','UL','LI']);
+  const permitidos = new Set(['B','I','UL','LI','BR']);
   function walk(nodo){
     const hijos = Array.from(nodo.childNodes);
     hijos.forEach(h=>{
@@ -553,6 +553,10 @@ function crearEditorEnriquecido(contId, valorInicial){
     {cmd:'bold', label:'B', title:'Negrita'},
     {cmd:'italic', label:'I', title:'Cursiva'},
     {cmd:'insertUnorderedList', label:'• Lista', title:'Lista con viñetas'},
+    // 2026-09-25 (pedido de Fernando): sin esto no había forma de cortar una
+    // línea sin volverla un ítem de lista — insertLineBreak mete un <br> de
+    // verdad, lo mismo que ahora hace Enter fuera de una lista (ver abajo).
+    {cmd:'insertLineBreak', label:'↵ Salto', title:'Salto de línea'},
   ].forEach(b=>{
     const btn=document.createElement('button');
     btn.type='button';
@@ -594,6 +598,47 @@ function crearEditorEnriquecido(contId, valorInicial){
     }
     editable.dispatchEvent(new Event('input', {bubbles:true}));
   });
+  // Enter fuera de una lista NO debe crear un bloque nuevo (Chrome mete un
+  // <div>/<p>, que este formato no soporta — no hay <p>/<br> reales para
+  // separarlos, así que el "salto" se veía colapsado al guardar). Dentro de
+  // una lista, Enter sigue haciendo lo esperado: una viñeta nueva.
+  editable.addEventListener('keydown', (e)=>{
+    if(e.key!=='Enter' || e.shiftKey) return;
+    const sel=window.getSelection();
+    if(!sel || !sel.rangeCount) return;
+    let nodo = sel.anchorNode;
+    if(nodo && nodo.nodeType===3) nodo = nodo.parentElement;
+    const dentroDeLista = !!(nodo && nodo.closest && nodo.closest('li'));
+    if(dentroDeLista) return;
+    e.preventDefault();
+    document.execCommand('insertLineBreak');
+    editable.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+  // Vaciar de verdad al borrar todo — sin esto, seleccionar todo y borrar
+  // (Ctrl+A + Supr sobre contenido que empezaba con <ul><li><b>...) deja un
+  // <ul><li><br></li></ul> residual: sin texto, pero con toda la estructura
+  // de lista y negrita todavía ahí. El próximo caracter que se tipea entra
+  // DENTRO de ese <li><b>, así que se ve "pegado" en negrita y en viñeta sin
+  // que el docente lo haya pedido. Detectado en Chrome real, reproducible.
+  // El chequeo es sobre el HTML, no sobre "hay o no un <br>": un <br> suelto
+  // (`<br>` o vacío del todo) es un estado legítimo — lo que hay que
+  // destruir es la ENVOLTURA (ul/li/b/i) que sobrevive sin contenido.
+  // replaceChildren() sola no alcanza: el Range activo puede seguir
+  // apuntando al nodo ya destruido, y Chrome arrastra su estilo de tipeo
+  // desde ahí. Se arma una selección nueva, colapsada al inicio del div ya
+  // limpio, para que lo próximo que se tipee no herede nada.
+  editable.addEventListener('input', ()=>{
+    if(editable.textContent.trim()) return;
+    const html = editable.innerHTML;
+    if(html==='' || html==='<br>') return;
+    editable.replaceChildren();
+    const sel=window.getSelection();
+    const range=document.createRange();
+    range.selectNodeContents(editable);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
   // Actualizar vista previa en vivo al editar
   editable.addEventListener('input', ()=> {
     try{ actualizarVistaPreviaSalaP5(); }catch{}
@@ -604,58 +649,52 @@ function crearEditorEnriquecido(contId, valorInicial){
   cont.appendChild(toolbar);
   cont.appendChild(editable);
   return {
+    // Recorre el DOM del editable y serializa a <b>/<i>/<ul><li>/<br> — una
+    // sola función recursiva en vez de la misma lógica copiada tres veces
+    // (top-level, dentro de un bloque DIV/P, dentro de un LI), que además
+    // solo entendía un nivel: un <b> con un <br> adentro perdía el <br>
+    // porque cada copia leía `ch.textContent` plano. Recursiva, entiende
+    // cualquier combinación válida sin importar cuántos niveles tenga.
     getValue(){
-      // Recorrer DOM del editable y serializar a <b>/<i>/<ul><li>
-      let out='';
-      editable.childNodes.forEach(n=>{
-        if(n.nodeType===3) out += n.textContent;
-        else if(n.nodeType===1){
-          if(n.tagName==='DIV' || n.tagName==='P'){
-            // Bloques creados por execCommand — serializar hijos + salto
-            n.childNodes.forEach(ch=>{
-              if(ch.nodeType===3) out += ch.textContent;
-              else if(ch.tagName==='B' || ch.tagName==='STRONG') out += `<b>${ch.textContent}</b>`;
-              else if(ch.tagName==='I' || ch.tagName==='EM') out += `<i>${ch.textContent}</i>`;
-              else if(ch.tagName==='UL'){
-                out += '<ul>';
-                ch.childNodes.forEach(li=>{
-                  if(li.tagName==='LI'){
-                    let liInner='';
-                    li.childNodes.forEach(c2=>{
-                      if(c2.nodeType===3) liInner+=c2.textContent;
-                      else if(c2.tagName==='B'||c2.tagName==='STRONG') liInner+=`<b>${c2.textContent}</b>`;
-                      else if(c2.tagName==='I'||c2.tagName==='EM') liInner+=`<i>${c2.textContent}</i>`;
-                      else liInner+=c2.textContent||'';
-                    });
-                    out += `<li>${liInner}</li>`;
-                  }
-                });
-                out+='</ul>';
-              } else out+= ch.textContent||'';
-            });
-            out+='\n';
-          } else if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${n.textContent}</b>`;
-          else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${n.textContent}</i>`;
-          else if(n.tagName==='UL'){
-            out+='<ul>';
-            n.childNodes.forEach(li=>{
-              if(li.tagName==='LI'){
-                let liInner='';
-                li.childNodes.forEach(c2=>{
-                  if(c2.nodeType===3) liInner+=c2.textContent;
-                  else if(c2.tagName==='B'||c2.tagName==='STRONG') liInner+=`<b>${c2.textContent}</b>`;
-                  else if(c2.tagName==='I'||c2.tagName==='EM') liInner+=`<i>${c2.textContent}</i>`;
-                  else liInner+=c2.textContent||'';
-                });
-                out+=`<li>${liInner}</li>`;
-              }
-            });
-            out+='</ul>';
-          } else if(n.tagName==='BR') out+='\n';
-          else out+= n.textContent||'';
-        }
-      });
-      return out.trim();
+      function serializarInline(nodo){
+        let out='';
+        nodo.childNodes.forEach(n=>{
+          if(n.nodeType===3) out+=n.textContent;
+          else if(n.nodeType===1){
+            if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${serializarInline(n)}</b>`;
+            else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${serializarInline(n)}</i>`;
+            else if(n.tagName==='BR') out+='<br>';
+            else out+=serializarInline(n); // span/font/etc. sin permiso: se queda el texto
+          }
+        });
+        return out;
+      }
+      function serializarLista(ul){
+        let out='<ul>';
+        Array.from(ul.children).forEach(li=>{
+          if(li.tagName==='LI') out+=`<li>${serializarInline(li)}</li>`;
+        });
+        return out+'</ul>';
+      }
+      // Nivel superior: además de texto/b/i/br, acepta <ul> y los bloques
+      // DIV/P que Chrome crea solo — un DIV/P vacío o con solo un <br> (lo
+      // que deja un Enter suelto) no debe imprimir nada.
+      function serializarBloque(nodo){
+        let out='';
+        nodo.childNodes.forEach(n=>{
+          if(n.nodeType===3) out+=n.textContent;
+          else if(n.nodeType===1){
+            if(n.tagName==='DIV'||n.tagName==='P') out+=serializarBloque(n);
+            else if(n.tagName==='UL') out+=serializarLista(n);
+            else if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${serializarInline(n)}</b>`;
+            else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${serializarInline(n)}</i>`;
+            else if(n.tagName==='BR') out+='<br>';
+            else out+=serializarBloque(n);
+          }
+        });
+        return out;
+      }
+      return serializarBloque(editable).trim();
     },
     setValue(v){
       editable.replaceChildren(sanitizarHtmlAcotado(v||''));

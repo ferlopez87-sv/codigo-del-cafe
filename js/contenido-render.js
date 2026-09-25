@@ -23,16 +23,25 @@ export function humanizarClave(clave) {
 // aunque ahora reconoce los tres formatos, no solo negrita.
 // Anidamiento a propósito limitado a lo que P5b permite editar: <b>/<i> sueltos
 // o dentro de un <li>; ningún <ul> dentro de <b>/<i>, ningún <ul> dentro de <li>.
+// <br> (2026-09-25, pedido de Fernando) va al mismo nivel que <b>/<i> — nunca
+// adentro de ellos: este parser captura el interior de <b>/<i> de un solo
+// golpe (`el.textContent = grupo`, sin volver a recorrerlo), así que un <br>
+// ahí adentro se vería literal. srv/validadores/contenido.js lo rechaza antes
+// de que llegue a guardarse, así que acá ni hace falta contemplarlo.
 function _parsearInline(texto, contenedor) {
   let resto = String(texto ?? '');
-  const re = /<(b|i)>([\s\S]*?)<\/\1>/;
+  const re = /<(b|i)>([\s\S]*?)<\/\1>|<br\s*\/?>/;
   while (resto.length) {
     const m = re.exec(resto);
     if (!m) { contenedor.appendChild(document.createTextNode(resto)); break; }
     if (m.index > 0) contenedor.appendChild(document.createTextNode(resto.slice(0, m.index)));
-    const el = document.createElement(m[1] === 'b' ? 'strong' : 'em');
-    el.textContent = m[2];
-    contenedor.appendChild(el);
+    if (m[1] === undefined) {
+      contenedor.appendChild(document.createElement('br'));
+    } else {
+      const el = document.createElement(m[1] === 'b' ? 'strong' : 'em');
+      el.textContent = m[2];
+      contenedor.appendChild(el);
+    }
     resto = resto.slice(m.index + m[0].length);
   }
 }
@@ -49,7 +58,7 @@ function _parsearItems(texto, ul) {
 
 export function pintarConNegritas(contenedor, texto) {
   let resto = String(texto ?? '');
-  const re = /<(b|i)>([\s\S]*?)<\/\1>|<ul>([\s\S]*?)<\/ul>/;
+  const re = /<(b|i)>([\s\S]*?)<\/\1>|<ul>([\s\S]*?)<\/ul>|<br\s*\/?>/;
   while (resto.length) {
     const m = re.exec(resto);
     if (!m) { contenedor.appendChild(document.createTextNode(resto)); break; }
@@ -58,10 +67,12 @@ export function pintarConNegritas(contenedor, texto) {
       const ul = document.createElement('ul');
       _parsearItems(m[3], ul);
       contenedor.appendChild(ul);
-    } else {
+    } else if (m[1] !== undefined) {
       const el = document.createElement(m[1] === 'b' ? 'strong' : 'em');
       el.textContent = m[2];
       contenedor.appendChild(el);
+    } else {
+      contenedor.appendChild(document.createElement('br'));
     }
     resto = resto.slice(m.index + m[0].length);
   }

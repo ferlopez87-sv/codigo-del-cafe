@@ -212,14 +212,21 @@ function validarVisual(visual) {
 // PUT directo por API salta esa capa entera — mismo criterio que el resto
 // del sistema (defensa en profundidad, RLS no es la única capa tampoco).
 //
-// Solo tres formatos, cuatro tags: negrita, cursiva, lista con viñetas. Sin
-// atributos en ninguno — ni siquiera `class`: el estilo vive en el CSS de la
-// página, nunca en el contenido. `js/contenido-render.js` (el mismo parser
-// que pinta la pantalla del estudiante y la vista previa del editor) solo
-// reconoce estos tags; cualquier otro que hoy no se rechace se vería
-// literal como texto, así que rechazarlo acá es lo que evita que el docente
-// guarde una sala que después se ve rota.
-const TAGS_FORMATO_ACOTADO = ['b', 'i', 'ul', 'li'];
+// Solo cuatro formatos, cinco tags: negrita, cursiva, lista con viñetas y
+// salto de línea. Sin atributos en ninguno — ni siquiera `class`: el estilo
+// vive en el CSS de la página, nunca en el contenido. `js/contenido-render.js`
+// (el mismo parser que pinta la pantalla del estudiante y la vista previa del
+// editor) solo reconoce estos tags; cualquier otro que hoy no se rechace se
+// vería literal como texto, así que rechazarlo acá es lo que evita que el
+// docente guarde una sala que después se ve rota.
+const TAGS_FORMATO_ACOTADO = ['b', 'i', 'ul', 'li', 'br'];
+
+// 2026-09-25 (pedido de Fernando): sin `<br>`, la única forma de separar
+// visualmente dos ideas dentro de un mismo campo era volverlas <li> de una
+// lista — un salto de línea real no existía. `<br>` es la excepción a "todo
+// tag abierto tiene su cierre": es un elemento vacío (nunca tiene contenido
+// ni cierre propio), igual que en HTML real.
+const TAGS_VACIOS = ['br'];
 
 // QA adversarial (2026-09-23, Back EsC) encontró dos huecos: el renderizador
 // del estudiante (js/contenido-render.js) es case-sensitive y no tolera que
@@ -256,12 +263,25 @@ function validarFormatoAcotado(texto) {
     const autoCierre = /\/\s*$/.test(resto);
     const atributos = resto.replace(/\/\s*$/, '').trim();
     if (atributos.length > 0) return false; // sin onerror=, style=, class=, nada
+    if (TAGS_VACIOS.includes(tag)) {
+      if (esCierre) return false; // "</br>" no existe: <br> nunca se cierra
+      // js/contenido-render.js reconoce <b>/<i> con un regex de un solo nivel
+      // (`el.textContent = grupoCapturado`, sin volver a parsear ese interior):
+      // un <br> adentro de <b>/<i> se guardaría bien pero se vería literal
+      // ("<br>" como texto) en pantalla. Mismo motivo por el que <ul> tampoco
+      // anida ahí. <ul> solo contiene <li> — ni siquiera un <br> suelto.
+      if (pila.includes('b') || pila.includes('i')) return false;
+      if (pila[pila.length - 1] === 'ul') return false;
+      // <br> y <br/> son equivalentes acá — nunca va a la pila: no espera
+      // cierre ni puede contener nada.
+      continue;
+    }
     if (esCierre) {
       if (autoCierre) return false; // "</b/>" no es una forma válida
       if (pila.length === 0 || pila[pila.length - 1] !== tag) return false; // desbalanceado o mal anidado
       pila.pop();
     } else {
-      if (autoCierre) return false; // ninguno de los 4 tags se auto-cierra en este formato
+      if (autoCierre) return false; // ninguno de estos 4 tags se auto-cierra en este formato
       if (tag === 'li' && pila[pila.length - 1] !== 'ul') return false; // <li> solo dentro de <ul>
       if ((tag === 'b' || tag === 'i') && pila.includes(tag)) return false; // sin reabrir el mismo formato adentro de sí mismo
       pila.push(tag);
