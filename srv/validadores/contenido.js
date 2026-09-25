@@ -283,7 +283,14 @@ function validarFormatoAcotado(texto) {
     } else {
       if (autoCierre) return false; // ninguno de estos 4 tags se auto-cierra en este formato
       if (tag === 'li' && pila[pila.length - 1] !== 'ul') return false; // <li> solo dentro de <ul>
-      if ((tag === 'b' || tag === 'i') && pila.includes(tag)) return false; // sin reabrir el mismo formato adentro de sí mismo
+      // 2026-09-25 (P10/T4): mismo motivo que prohíbe el <br> dentro de b/i.
+      // El renderizador no vuelve a parsear el interior de b/i (textContent)
+      // y matchea <li> con un regex no recursivo, así que cualquier anidado
+      // se vería como texto literal roto en la pantalla del estudiante. El
+      // editor ya los aplana antes de guardar (js/docente.js, getValue): acá
+      // alcanza con rechazarlos.
+      if (tag === 'ul' && (pila.includes('b') || pila.includes('i') || pila.includes('li'))) return false; // ni <ul> dentro de b/i, ni <ul> dentro de <li>
+      if ((tag === 'b' || tag === 'i') && (pila.includes('b') || pila.includes('i'))) return false; // b/i nunca anidados entre sí, tampoco el mismo formato repetido
       pila.push(tag);
     }
   }
