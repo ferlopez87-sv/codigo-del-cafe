@@ -671,18 +671,35 @@ function crearEditorEnriquecido(contId, valorInicial){
     // porque cada copia leía `ch.textContent` plano. Recursiva, entiende
     // cualquier combinación válida sin importar cuántos niveles tenga.
     getValue(){
-      function serializarInline(nodo){
+      // P10 — el validador rechaza <br> dentro de <b>/<i> (contenido-render.js
+      // no reparsea su interior), pero Chrome lo produce al poner en negrita un
+      // texto que cruza un salto. `abiertos` lleva los b/i en curso para que
+      // cada BR los cierre y reabra: <b>a<br>b</b> → <b>a</b><br><b>b</b>.
+      function envolver(tag, nodo, abiertos){
+        return `<${tag}>${serializarInline(nodo, [...abiertos, tag])}</${tag}>`;
+      }
+      function serializarInline(nodo, abiertos=[]){
         let out='';
         nodo.childNodes.forEach(n=>{
           if(n.nodeType===3) out+=n.textContent;
           else if(n.nodeType===1){
-            if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${serializarInline(n)}</b>`;
-            else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${serializarInline(n)}</i>`;
-            else if(n.tagName==='BR') out+='<br>';
-            else out+=serializarInline(n); // span/font/etc. sin permiso: se queda el texto
+            if(n.tagName==='B'||n.tagName==='STRONG') out+=envolver('b', n, abiertos);
+            else if(n.tagName==='I'||n.tagName==='EM') out+=envolver('i', n, abiertos);
+            else if(n.tagName==='BR'){
+              const cierre = abiertos.slice().reverse().map(t=>`</${t}>`).join('');
+              const apertura = abiertos.map(t=>`<${t}>`).join('');
+              out+=cierre+'<br>'+apertura;
+            }
+            else out+=serializarInline(n, abiertos); // span/font/etc. sin permiso: se queda el texto
           }
         });
         return out;
+      }
+      // Pares que quedan vacíos al partir por un BR (<b></b>, <i><b></b></i>).
+      function quitarVacios(html){
+        let previo;
+        do { previo=html; html=html.replace(/<(b|i)><\/\1>/g, ''); } while(html!==previo);
+        return html;
       }
       function serializarLista(ul){
         let out='<ul>';
@@ -701,15 +718,15 @@ function crearEditorEnriquecido(contId, valorInicial){
           else if(n.nodeType===1){
             if(n.tagName==='DIV'||n.tagName==='P') out+=serializarBloque(n);
             else if(n.tagName==='UL') out+=serializarLista(n);
-            else if(n.tagName==='B'||n.tagName==='STRONG') out+=`<b>${serializarInline(n)}</b>`;
-            else if(n.tagName==='I'||n.tagName==='EM') out+=`<i>${serializarInline(n)}</i>`;
+            else if(n.tagName==='B'||n.tagName==='STRONG') out+=envolver('b', n, []);
+            else if(n.tagName==='I'||n.tagName==='EM') out+=envolver('i', n, []);
             else if(n.tagName==='BR') out+='<br>';
             else out+=serializarBloque(n);
           }
         });
         return out;
       }
-      return serializarBloque(editable).trim();
+      return quitarVacios(serializarBloque(editable)).trim();
     },
     setValue(v){
       editable.replaceChildren(sanitizarHtmlAcotado(v||''));
