@@ -13,7 +13,7 @@ do $mig$
 declare
   v_mision uuid;
 begin
-  insert into misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado)
+  insert into misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado, brief_titulo, brief_contenido)
   values (
     $q$expediente-holcim$q$,
     $q$Expediente Holcim$q$,
@@ -33,13 +33,30 @@ Sala 4: De tres indicadores, solo uno se puede declarar sin inflar. Los otros so
 Sala 5: El discurso del CEO mezcla datos que no cuadran, premios que son de otros y certificaciones sin indicadores. El wobble es la autenticidad.
 
 Veredicto: Holcim El Salvador hace cosas reales, pero las comunica con más confianza de la que sus datos sostienen. El riesgo reputacional no viene de ser una mala empresa: viene de decir algo que no puedes respaldar cuando alguien te lo pregunta. La confianza se construye con datos verificables, terceros creíbles y coherencia entre lo que haces, lo que dices y lo que otros dicen de ti.$q$,
-    'publicada'
+    'publicada',
+    $q$Quién es Holcim El Salvador$q$,
+    $q$<b>75 años en El Salvador.</b> Se fundó como CESSA en 1949 y adoptó la marca Holcim El Salvador en 2010.
+
+<b>Indicadores generales</b>
+<ul><li>Instalaciones: 2 plantas de cemento (El Ronco y Maya, en Metapán), 8 plantas fijas y 6 móviles de concreto, 1 planta de coprocesamiento Geocycle, 1 planta de agregados y 1 planta eléctrica.</li><li>736 empleos directos, 17 % de mujeres entre los colaboradores y 755 proveedores.</li><li>3,736 personas beneficiadas a través de Fundación Holcim.</li></ul>
+
+<b>Su estrategia de sostenibilidad:</b> cuatro pilares — economía circular, naturaleza y biodiversidad, clima y energía, y personas y comunidades.
+
+<b>Su compromiso más fuerte: ser carbono neutral.</b> El informe lo menciona sin año. Revista Economía (12 de noviembre de 2025) lo ubica en 2030 — la frase es del periodista, no una cita del CEO. Esa misma nota dice que Holcim:
+<ul><li>"ha logrado disminuir entre un 11 % y un 12 % las emisiones de CO2 por tonelada";</li><li>obtiene "el 20 % de la energía" de una planta solar;</li><li>sustituye "un 15 % de su combustible" por materiales reutilizados;</li><li>invertirá $30 millones entre 2025 y 2027.</li></ul>
+
+<b>Quiénes son</b>
+<ul><li>Marcelo Arrieta — CEO; 2024 fue su primer año en el cargo.</li><li>Rocío Flores — Gerente de Desarrollo Sostenible.</li><li>Jorge Peña — Gerente de Geocycle.</li><li>Melissa Montalvo — Head de Comunicaciones y Asuntos Corporativos.</li></ul>
+
+<i>Hoy no vamos a decidir si Holcim es buena o mala. Vamos a revisar si lo que dice está respaldado.</i>$q$
   )
   on conflict (slug) do update set
-    titulo      = excluded.titulo,
-    subtitulo   = excluded.subtitulo,
-    intro       = excluded.intro,
-    veredicto   = excluded.veredicto
+    titulo          = excluded.titulo,
+    subtitulo       = excluded.subtitulo,
+    intro           = excluded.intro,
+    veredicto       = excluded.veredicto,
+    brief_titulo    = excluded.brief_titulo,
+    brief_contenido = excluded.brief_contenido
   returning id into v_mision;
 
   insert into estaciones (mision_id, orden, titulo, pilar, narrativa, datos, reto, interaccion, pistas, feedback_ok, codigo, respuesta, desbloqueo, icono, visual)
