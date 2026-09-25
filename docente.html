@@ -339,9 +339,11 @@ body{background:#131313;color:#e5e2e1}
 
 <div class="flex items-center gap-3 mb-2">
 <button id="btn-reto-actualizar-vista" type="button" class="font-evidence-data text-xs uppercase border border-primary bg-primary text-on-primary px-4 py-2 hover:opacity-90">Actualizar vista previa</button>
-<span class="font-label-sm text-on-surface-variant">Reconstruye el widget desde arriba — si ya habías marcado una respuesta, se pierde y hay que volver a marcarla.</span>
+<span class="font-label-sm text-on-surface-variant">Reconstruye el widget con los cambios de arriba. Lo que ya marcaste se conserva mientras esa opción o ítem siga existiendo.</span>
 </div>
-<div id="reto-widget-marcar" class="estacion-interaccion border border-audit-border bg-background p-4 rounded mb-2"></div>
+<p id="reto-rotulo-respuesta" class="font-label-sm uppercase text-primary mb-1">Respuesta correcta — marcala en este widget</p>
+<div id="reto-widget-marcar" class="estacion-interaccion border border-primary bg-background p-4 rounded mb-1"></div>
+<p id="reto-resumen-respuesta" class="font-evidence-data text-sm text-on-surface mb-2" aria-live="polite">Sin respuesta marcada todavía.</p>
 <div id="reto-widget-extra" class="space-y-2 mb-4"></div>
 
 <div class="border border-audit-border bg-surface-container-low p-4 mb-4">

@@ -2,7 +2,7 @@
 // Vanilla type:module, usa Docente/Auth de api.js, textContent siempre (XSS §14.4)
 import { Auth, Docente, Contenido } from './api.js';
 import { pintarNarrativaEstacion, pintarDatosEstacion, pintarRetoEstacion } from './contenido-render.js';
-import { renderInteraccion, serializarRespuesta } from './render.js';
+import { renderInteraccion, serializarRespuesta, marcarRespuesta } from './render.js';
 import { crearGrafico } from './dataviz.js';
 
 let sesionActivaId = null;
@@ -476,10 +476,24 @@ let wysPistas = []; // por indice
 // P10 — api.js deja en error.mensaje el código crudo del servidor ("dato_invalido");
 // acá se traduce a algo que el docente pueda corregir. El campo viene en detalle.campo.
 const ETIQUETAS_CAMPO = { narrativa:'Narrativa', reto:'Reto', feedback_ok:'Feedback', pistas:'Pistas', brief_contenido:'Brief' };
+// P12 — motivo que manda el backend en los 400 con campo:'respuesta'. Sin
+// motivo (backend viejo) se cae al mensaje genérico de campo inválido.
+const MOTIVOS_RESPUESTA = {
+  respuesta_vacia: 'Falta marcar la respuesta correcta en el widget de «Respuesta correcta».',
+  id_inexistente: 'La respuesta marcada apunta a una opción o ítem que ya no existe. Volvé a marcarla.',
+  cierre_faltante: 'El reto tiene pregunta de cierre: marcá también la respuesta correcta del cierre.',
+  cierre_sobrante: 'Hay una respuesta de cierre marcada, pero el reto no tiene cierre activo.',
+  cierre_invalido: 'La respuesta del cierre no coincide con ninguna de sus opciones. Volvé a marcarla.',
+  rango_invalido: 'El rango no es válido: revisá que el mínimo no sea mayor que el máximo.',
+  orden_incompleto: 'Falta ubicar alguna tarjeta: el orden correcto tiene que incluir todos los ítems.',
+  clasificacion_incompleta: 'Falta clasificar algún ítem: cada uno necesita su categoría.',
+  formato: 'La respuesta no tiene la forma que espera este tipo de reto. Volvé a marcarla en el widget.',
+};
 function mensajeError(error, respaldo){
   const codigo = error?.codigo || '';
   const campo = error?.detalle?.campo || '';
   if(codigo==='dato_invalido'){
+    if(campo==='respuesta' && MOTIVOS_RESPUESTA[error?.detalle?.motivo]) return MOTIVOS_RESPUESTA[error.detalle.motivo];
     if(ETIQUETAS_CAMPO[campo]) return `El campo «${ETIQUETAS_CAMPO[campo]}» tiene formato no permitido. Solo negrita, cursiva, listas y saltos de línea; ni tablas ni texto pegado con estilos.`;
     if(campo==='slug') return 'Ese slug ya existe o no es válido.';
     if(campo) return `El campo «${campo}» no es válido.`;
@@ -1186,6 +1200,7 @@ async function borrarSalaP5(){
 // ---------- Constructor de reto P5 ----------
 let retoState = { tipo:'opcion_unica', enunciado:'', opciones:[], items:[], categorias:[], modo:'texto', placeholder:'', min:null, max:null, paso:null, sufijo:'', cierre:null, visual:null, respuesta:{ valor:null } };
 let retoRespuestaExtra = { min:null, max:null }; // para respuesta_corta modo numero por rango
+let retoMarcaInicial = null; // P12 — respuesta a marcar en el próximo render (abrir sala)
 
 function initConstructorDesdeSala(){
   const inter = salaActivaP5?.interaccion||{};
@@ -1215,6 +1230,9 @@ function initConstructorDesdeSala(){
   renderSubformReto();
   renderCierreSubform();
   renderVisualForm();
+  // P12 — la respuesta guardada se marca en el widget al abrir. {} (no null)
+  // para que una sala sin respuesta no herede la marca del widget anterior.
+  retoMarcaInicial = salaActivaP5?.respuesta || {};
   actualizarVistaPreviaReto();
 }
 function renderSubformReto(){
@@ -1276,8 +1294,8 @@ function renderSubformReto(){
       inpMin.className='w-1/2 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
       const inpMax=document.createElement('input'); inpMax.type='number'; inpMax.step='any'; inpMax.placeholder='Máx'; inpMax.value= retoRespuestaExtra.max??'';
       inpMax.className='w-1/2 bg-surface-container-lowest border border-audit-border rounded px-2 py-1 text-xs';
-      inpMin.addEventListener('input', ()=>{ retoRespuestaExtra.min= inpMin.value===''? null : Number(inpMin.value); });
-      inpMax.addEventListener('input', ()=>{ retoRespuestaExtra.max= inpMax.value===''? null : Number(inpMax.value); });
+      inpMin.addEventListener('input', ()=>{ retoRespuestaExtra.min= inpMin.value===''? null : Number(inpMin.value); actualizarResumenRespuesta(); });
+      inpMax.addEventListener('input', ()=>{ retoRespuestaExtra.max= inpMax.value===''? null : Number(inpMax.value); actualizarResumenRespuesta(); });
       modoResp.append(inpMin, inpMax);
       respRow.append(modoResp);
       const ayuda=document.createElement('p'); ayuda.className='font-label-sm text-xs text-on-surface-variant'; ayuda.textContent='Si dejás el rango vacío, la respuesta se toma del widget de abajo (valor exacto). Si ponés mín/máx, el widget debe tener un valor dentro del rango al probar, pero al guardar se usará el rango.';
@@ -1286,7 +1304,7 @@ function renderSubformReto(){
     } else {
       // Texto: la respuesta se marca en el widget de abajo, no en campo aparte (plan P5)
       const info=document.createElement('p'); info.className='font-label-sm text-xs text-on-surface-variant border border-audit-border bg-surface-container-lowest p-2';
-      info.textContent='Escribí la respuesta correcta en el widget de abajo (después de "Actualizar vista previa"). No hay campo aparte.';
+      info.textContent='Escribí la respuesta correcta en el widget de abajo, en «Respuesta correcta». No hay campo aparte.';
       wrap.appendChild(info);
     }
     cont.appendChild(wrap);
@@ -1431,7 +1449,13 @@ function actualizarVistaPreviaReto(){
   const inter = construirInteraccionDesdeRetoState();
   const widgetMarcar=$('reto-widget-marcar');
   if(widgetMarcar){
+    // P12 — reconstruir no borra la marca: se lee antes y se vuelve a aplicar
+    // (lo que apunte a ids borrados se descarta solo, ver marcarRespuesta).
+    const marca = retoMarcaInicial ?? serializarRespuesta(widgetMarcar);
+    retoMarcaInicial = null;
     renderInteraccion(widgetMarcar, inter);
+    marcarRespuesta(widgetMarcar, marca);
+    actualizarResumenRespuesta();
   }
   const extra=$('reto-widget-extra');
   if(extra){
@@ -1471,6 +1495,28 @@ function actualizarVistaPreviaReto(){
       probarBloque.setAttribute('hidden','');
     }
   }
+}
+// P12 — resumen legible de lo marcado en #reto-widget-marcar (solo textContent).
+function actualizarResumenRespuesta(){
+  const el=$('reto-resumen-respuesta');
+  if(!el) return;
+  const r=construirRespuestaDesdeReto();
+  const texto=(lista, id)=> (lista||[]).find(o=> String(o.id).toLowerCase()===String(id))?.texto ?? id;
+  const partes=[];
+  const v=r.valor;
+  if(r.min!=null || r.max!=null) partes.push(`Correcta: rango ${r.min??'—'} a ${r.max??'—'}`);
+  else if(v!==undefined && v!==null){
+    if(retoState.tipo==='opcion_unica') partes.push(`Correcta: ${texto(retoState.opciones, v)}`);
+    else if(retoState.tipo==='respuesta_corta') partes.push(`Correcta: ${v}`);
+    else if(retoState.tipo==='orden') partes.push(`Orden: ${v.map(id=> texto(retoState.items, id)).join(' → ')}`);
+    else if(retoState.tipo==='checklist') partes.push(`Correctas: ${v.map(id=> texto(retoState.items, id)).join(', ')}`);
+    else if(retoState.tipo==='clasificacion'){
+      const total=retoState.items.length, hechos=Object.keys(v).length;
+      partes.push(`Clasificación (${hechos} de ${total}): ${Object.entries(v).map(([i,c])=> `${texto(retoState.items, i)} → ${texto(retoState.categorias, c)}`).join(' · ')}`);
+    }
+  }
+  if(r.cierre) partes.push(`Cierre: ${texto(retoState.cierre?.opciones, r.cierre)}`);
+  el.textContent = partes.length ? partes.join(' · ') : 'Sin respuesta marcada todavía.';
 }
 function construirVisualDesdeForm(){
   const tipo=$('visual-tipo')?.value||'';
@@ -1675,6 +1721,10 @@ function enlazarEventosP5(){
     renderCierreSubform(); actualizarVistaPreviaReto();
   });
   $('btn-reto-actualizar-vista')?.addEventListener('click', actualizarVistaPreviaReto);
+  // P12 — el resumen sigue cada cambio del widget. En captura y diferido: las
+  // tarjetas de orden cortan la propagación y se mueven después del evento.
+  ['change','input','click','drop','keyup'].forEach(tipo=>
+    $('reto-widget-marcar')?.addEventListener(tipo, ()=> setTimeout(actualizarResumenRespuesta, 0), true));
   $('btn-visual-agregar-serie')?.addEventListener('click', ()=>{
     const cont=$('visual-series-lista');
     if(!cont) return;

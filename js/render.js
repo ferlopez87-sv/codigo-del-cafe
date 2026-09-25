@@ -171,10 +171,17 @@ function _renderSeleccionUnica(contenedor, enunciado, opciones, idPrefix) {
     contenedor.appendChild(fs);
     // .value delega al radio marcado — serializarRespuesta() lee ref.value
     // sin saber si es un <select> o este objeto.
-    return { get value() {
-      const marcado = radios.find((r) => r.checked);
-      return marcado ? marcado.value : '';
-    } };
+    // El setter lo usa marcarRespuesta(): un id que no existe deja todo sin marcar.
+    return {
+      get value() {
+        const marcado = radios.find((r) => r.checked);
+        return marcado ? marcado.value : '';
+      },
+      set value(v) {
+        const id = _norm(v);
+        radios.forEach((r) => { r.checked = r.value === id; });
+      },
+    };
   }
 
   const wrap = _mk('div');
@@ -477,6 +484,7 @@ function _renderOrden(contenedor, interaccion) {
   _estado.refs.ordenCasillas = casillas;
   _estado.refs.ordenLista = rejilla;
   _estado.refs.ordenLive = live;
+  _estado.refs.ordenBandeja = bandeja;
 }
 
 // checklist -----------------------------------------------------------------
@@ -636,6 +644,63 @@ export function serializarRespuesta(contenedor) {
   }
 
   return out;
+}
+
+// Marcado -----------------------------------------------------------------
+// Inversa de serializarRespuesta(): deja marcada en el widget YA renderizado
+// en `contenedor` una respuesta {valor, cierre?} — la usa el editor docente
+// para mostrar la respuesta guardada y para conservarla al reconstruir el
+// widget. Lo que ya no existe (un id borrado) se ignora en silencio, así
+// marcarRespuesta(c, r) seguido de serializarRespuesta(c) devuelve r cuando
+// todos sus ids siguen vigentes. Solo por contenedor (WeakMap), nunca sobre el
+// último renderizado global: con dos widgets vivos sería ambiguo.
+export function marcarRespuesta(contenedor, respuesta) {
+  const estado = contenedor ? _porContenedor.get(contenedor) : null;
+  if (!estado || !respuesta || typeof respuesta !== 'object') return;
+  const refs = estado.refs;
+  const v = respuesta.valor;
+
+  switch (estado.tipo) {
+    case 'opcion_unica':
+      if (refs.opcionUnica && v !== undefined && v !== null) refs.opcionUnica.value = _norm(v);
+      break;
+    case 'respuesta_corta':
+      if (refs.respuestaCorta && v !== undefined && v !== null) refs.respuestaCorta.value = String(v);
+      break;
+    case 'orden': {
+      const casillas = refs.ordenCasillas || [];
+      if (!Array.isArray(v) || !refs.ordenBandeja) break;
+      const tarjetas = Array.from(contenedor.querySelectorAll('.orden-tarjeta'));
+      tarjetas.forEach((t) => refs.ordenBandeja.appendChild(t));
+      v.forEach((id, i) => {
+        const t = tarjetas.find((x) => x.dataset.id === _norm(id));
+        if (t && casillas[i]) casillas[i].appendChild(t);
+      });
+      _ordenSincronizar(casillas, refs.ordenBandeja, refs.ordenLive);
+      break;
+    }
+    case 'checklist': {
+      if (!Array.isArray(v)) break;
+      const marcados = new Set(v.map(_norm));
+      (refs.checklist || []).forEach((cb) => { cb.checked = marcados.has(cb.value); });
+      break;
+    }
+    case 'clasificacion': {
+      if (!v || typeof v !== 'object') break;
+      const mapa = {};
+      Object.keys(v).forEach((k) => { mapa[_norm(k)] = _norm(v[k]); });
+      (refs.clasificacion || []).forEach((sel) => {
+        if (mapa[sel.dataset.frase] !== undefined) sel.value = mapa[sel.dataset.frase];
+      });
+      break;
+    }
+    default:
+      break;
+  }
+
+  if (refs.cierre && respuesta.cierre !== undefined && respuesta.cierre !== null) {
+    refs.cierre.value = _norm(respuesta.cierre);
+  }
 }
 
 // Helpers de test / reset (no afectan contrato) ------------------------
