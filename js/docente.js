@@ -473,6 +473,21 @@ let wysNarrativa = null, wysReto = null, wysFeedback = null;
 let wysBrief = null; // P9 — brief de la misión, vive en la Cabecera (Vista 2), no en una sala
 let wysPistas = []; // por indice
 
+// P10 — api.js deja en error.mensaje el código crudo del servidor ("dato_invalido");
+// acá se traduce a algo que el docente pueda corregir. El campo viene en detalle.campo.
+const ETIQUETAS_CAMPO = { narrativa:'Narrativa', reto:'Reto', feedback_ok:'Feedback', pistas:'Pistas', brief_contenido:'Brief' };
+function mensajeError(error, respaldo){
+  const codigo = error?.codigo || '';
+  const campo = error?.detalle?.campo || '';
+  if(codigo==='dato_invalido'){
+    if(ETIQUETAS_CAMPO[campo]) return `El campo «${ETIQUETAS_CAMPO[campo]}» tiene formato no permitido. Solo negrita, cursiva, listas y saltos de línea; ni tablas ni texto pegado con estilos.`;
+    if(campo==='slug') return 'Ese slug ya existe o no es válido.';
+    if(campo) return `El campo «${campo}» no es válido.`;
+  }
+  if(codigo==='brief_incompleto') return 'Completá el Brief (título y contenido) antes de publicar.';
+  if(codigo==='mision_en_uso') return 'Hay sesiones que usan esta misión. Borrá o reasigná esas sesiones primero.';
+  return error?.mensaje || respaldo;
+}
 function mostrarMensajeContenido(texto, tipo){
   const el = $('contenido-mensaje');
   if(!el) return;
@@ -777,7 +792,7 @@ async function crearMision(e){
   const veredicto=$('mision-nueva-veredicto')?.value.trim();
   if(!slug||!titulo||!veredicto){ mostrarMensajeContenido('Slug, título y veredicto son obligatorios.'); return; }
   const {datos, error} = await Contenido.crearMision({slug, titulo, veredicto});
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo crear.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo crear.')); return; }
   mostrarMensajeContenido(`Misión "${titulo}" creada.`, 'ok');
   $('form-nueva-mision')?.setAttribute('hidden','');
   await cargarBiblioteca();
@@ -786,7 +801,7 @@ async function crearMision(e){
 async function duplicarMision(id){
   if(!confirm('¿Duplicar esta misión?')) return;
   const {datos, error} = await Contenido.duplicarMision(id);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo duplicar.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo duplicar.')); return; }
   mostrarMensajeContenido('Misión duplicada.', 'ok');
   await cargarBiblioteca();
 }
@@ -795,10 +810,7 @@ async function publicarMision(id){
   if(error){
     // P9 — el servidor rechaza publicar sin brief con {error:'brief_incompleto'};
     // acá se traduce a un mensaje que dice qué falta, no un 400 genérico.
-    const mensaje = error.codigo==='brief_incompleto'
-      ? 'Completá el Brief (título y contenido) antes de publicar.'
-      : (error.mensaje||'No se pudo publicar.');
-    mostrarMensajeContenido(mensaje);
+    mostrarMensajeContenido(mensajeError(error, 'No se pudo publicar.'));
     return;
   }
   mostrarMensajeContenido('Misión publicada.', 'ok');
@@ -808,7 +820,7 @@ async function publicarMision(id){
 async function borrarMision(id, titulo){
   if(!confirm(`¿Borrar "${titulo||id}" para siempre? Se pierden sus salas. Esto NO se puede deshacer.`)) return;
   const {error} = await Contenido.borrarMision(id);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo borrar. Si está en uso por alguna sesión, primero borrá esas sesiones.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo borrar. Si está en uso por alguna sesión, primero borrá esas sesiones.')); return; }
   mostrarMensajeContenido('Misión borrada.', 'ok');
   if(misionActivaP5?.id===id){ misionActivaP5=null; salasP5=[]; setVistaP5('biblioteca'); }
   await cargarBiblioteca();
@@ -840,7 +852,7 @@ async function abrirMision(id){
 }
 async function cargarSalasMision(misionId){
   const {datos, error} = await Contenido.estaciones(misionId);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudieron cargar las salas.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudieron cargar las salas.')); return; }
   salasP5 = Array.isArray(datos)? datos.slice().sort((a,b)=> (a.orden||0)-(b.orden||0)) : [];
   renderListaSalas();
   if(salasP5.length) seleccionarSalaP5(salasP5[0].id);
@@ -881,7 +893,7 @@ async function moverSala(id, dir){
   const ordenIds = salasP5.map(s=> s.id);
   const tmp = ordenIds[idx]; ordenIds[idx]=ordenIds[nuevoIdx]; ordenIds[nuevoIdx]=tmp;
   const {datos, error} = await Contenido.reordenarEstaciones(misionActivaP5.id, ordenIds);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo reordenar.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo reordenar.')); return; }
   salasP5 = Array.isArray(datos)? datos.slice().sort((a,b)=> (a.orden||0)-(b.orden||0)) : salasP5;
   renderListaSalas();
   // Refrescar biblioteca para codigo maestro efectivo
@@ -1071,7 +1083,7 @@ async function guardarSalaP5(){
   if(!payload.interaccion){ mostrarMensajeContenido('Esta sala aún no tiene reto interactivo. Usá "Constructor de reto" primero.'); return; }
   if(!confirm(`¿Guardar cambios en "${salaActivaP5.titulo}"?`)) return;
   const {datos: guardada, error} = await Contenido.actualizarEstacion(salaActivaP5.id, payload);
-  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo guardar: ${error.campo||''}`); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, `No se pudo guardar: ${error.campo||''}`)); return; }
   mostrarMensajeContenido('Sala guardada.', 'ok');
   // Refrescar cache
   const idx = salasP5.findIndex(s=> String(s.id)===String(guardada.id));
@@ -1097,7 +1109,7 @@ async function guardarMisionP5(){
     brief_titulo: briefTitulo||null, brief_contenido: briefContenido||null,
   };
   const {datos, error} = await Contenido.actualizarMision(misionActivaP5.id, payload);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo guardar la misión.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo guardar la misión.')); return; }
   mostrarMensajeContenido('Misión guardada.', 'ok');
   misionActivaP5=datos;
   const fe=$('mision-codigo-efectivo'); if(fe) fe.textContent=datos.codigo_maestro_efectivo||'—';
@@ -1113,7 +1125,7 @@ async function agregarSalaP5(){
     respuesta:{ valor:'a' }, desbloqueo:'libre', icono:'help', visual:null
   };
   const {datos, error} = await Contenido.crearEstacion(misionActivaP5.id, payload);
-  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo crear la sala: ${error.campo||''}`); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, `No se pudo crear la sala: ${error.campo||''}`)); return; }
   mostrarMensajeContenido('Sala creada.', 'ok');
   await cargarSalasMision(misionActivaP5.id);
   seleccionarSalaP5(datos.id);
@@ -1122,7 +1134,7 @@ async function borrarSalaP5(){
   if(!salaActivaP5){ mostrarMensajeContenido('Ninguna sala seleccionada.'); return; }
   if(!confirm(`¿Borrar "${salaActivaP5.titulo}" para siempre?`)) return;
   const {error} = await Contenido.borrarEstacion(salaActivaP5.id);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo borrar.'); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, 'No se pudo borrar.')); return; }
   mostrarMensajeContenido('Sala borrada.', 'ok');
   await cargarSalasMision(misionActivaP5.id);
 }
@@ -1536,7 +1548,7 @@ async function guardarRetoP5(){
     interaccion: inter, respuesta: respuesta, desbloqueo: salaActivaP5.desbloqueo, icono: salaActivaP5.icono, visual: visual
   };
   const {datos, error} = await Contenido.actualizarEstacion(salaActivaP5.id, payload);
-  if(error){ mostrarMensajeContenido(error.mensaje||`No se pudo guardar el reto: ${error.campo||''}`); return; }
+  if(error){ mostrarMensajeContenido(mensajeError(error, `No se pudo guardar el reto: ${error.campo||''}`)); return; }
   mostrarMensajeContenido('Reto guardado.', 'ok');
   salaActivaP5=datos;
   const idx=salasP5.findIndex(s=> String(s.id)===String(datos.id));
