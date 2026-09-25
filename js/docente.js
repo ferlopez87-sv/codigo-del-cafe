@@ -675,8 +675,12 @@ function crearEditorEnriquecido(contId, valorInicial){
       // no reparsea su interior), pero Chrome lo produce al poner en negrita un
       // texto que cruza un salto. `abiertos` lleva los b/i en curso para que
       // cada BR los cierre y reabra: <b>a<br>b</b> → <b>a</b><br><b>b</b>.
+      // Tampoco se anidan b/i (el renderizador leería el interior como texto
+      // literal): dentro de uno, el hijo emite solo su contenido y gana el
+      // formato exterior. <i>a<b>x<br>y</b></i> → <i>ax</i><br><i>y</i>.
       function envolver(tag, nodo, abiertos){
-        return `<${tag}>${serializarInline(nodo, [...abiertos, tag])}</${tag}>`;
+        if(abiertos.length) return serializarInline(nodo, abiertos);
+        return `<${tag}>${serializarInline(nodo, [tag])}</${tag}>`;
       }
       function serializarInline(nodo, abiertos=[]){
         let out='';
