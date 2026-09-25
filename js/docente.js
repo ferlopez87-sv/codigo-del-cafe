@@ -486,7 +486,8 @@ function mensajeError(error, respaldo){
   }
   if(codigo==='brief_incompleto') return 'Completá el Brief (título y contenido) antes de publicar.';
   if(codigo==='mision_en_uso') return 'Hay sesiones que usan esta misión. Borrá o reasigná esas sesiones primero.';
-  return error?.mensaje || respaldo;
+  // Un código que no está en el mapa (p. ej. error_interno) no se muestra crudo.
+  return (error?.mensaje && error.mensaje !== codigo) ? error.mensaje : respaldo;
 }
 function mostrarMensajeContenido(texto, tipo){
   const el = $('contenido-mensaje');
