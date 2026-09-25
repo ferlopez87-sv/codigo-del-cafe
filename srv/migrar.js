@@ -38,7 +38,8 @@ const ARCHIVOS = [
   '03-funciones.sql',
   '04-docentes.sql',
   '05-seed.sql',
-  '06-superadmin.sql'
+  '06-superadmin.sql',
+  '07-mision-holcim.sql'
 ];
 
 function poolAdmin() {
