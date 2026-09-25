@@ -1347,13 +1347,17 @@ function enlazarEventosUnaVez() {
     if(_esExpediente(e.target)) e.preventDefault();
   });
 
-  // Botón Iniciar auditoría — sala de espera §7
+  // Botón Iniciar auditoría — sala de espera §7. Si la misión trae brief
+  // (P9), es lo primero que ve el equipo al entrar al tablero — nunca hace
+  // falta que alguien lo busque en la barra lateral. Sin brief (CGC hoy),
+  // el comportamiento queda igual que antes: el tablero vacío de siempre.
   const btnIniciar = $('btn-iniciar');
   if (btnIniciar) btnIniciar.addEventListener('click', async ()=>{
     const bienvenida=$('pantalla-bienvenida');
     const dashboard=$('pantalla-dashboard');
     if(bienvenida) bienvenida.setAttribute('hidden','');
     if(dashboard) dashboard.removeAttribute('hidden');
+    if (briefActual) mostrarBrief();
     // Forzar refresco de estado para arrancar cronómetro server (primer acceso sella iniciado_en)
     const id = equipoActual?.id;
     if(id) await cargarEstado(id);
