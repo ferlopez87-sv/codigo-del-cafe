@@ -42,6 +42,11 @@ services:
       DOMINIO_INSTITUCIONAL: ${DOMINIO_INSTITUCIONAL:-@monicaherrera.edu.sv}
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
+      # Código personal del docente para la primera entrada. Vacío por defecto:
+      # srv/migrar.js hace `if (!codigo) return`, así que en producción no hace
+      # nada. Solo se define al levantar el entorno local de pruebas.
+      BOOTSTRAP_DOCENTE_CODIGO: ${BOOTSTRAP_DOCENTE_CODIGO:-}
+      BOOTSTRAP_DOCENTE_CORREO: ${BOOTSTRAP_DOCENTE_CORREO:-}
     depends_on:
       db:
         condition: service_healthy
