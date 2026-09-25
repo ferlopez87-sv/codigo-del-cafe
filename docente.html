@@ -69,6 +69,8 @@ body{background:#131313;color:#e5e2e1}
 #armar-resultado tbody tr:nth-child(even){background:rgba(255,255,255,.03)}
 #btn-copiar-armar{min-height:44px}
 #btn-copiar-armar:focus-visible{outline:2px solid #88d982;outline-offset:2px}
+/* Listas del editor enriquecido (crearEditorEnriquecido): el preflight de Tailwind deja el <ul> sin viñeta ni sangría */
+[contenteditable="true"][role="textbox"] ul{list-style:disc;padding-left:1.25rem;margin:.25rem 0}
 </style>
 </head>
 <body class="font-body-md bg-background text-on-background flex flex-col md:flex-row min-h-screen antialiased">
