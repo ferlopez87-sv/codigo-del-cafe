@@ -290,6 +290,7 @@ export async function initJuego() {
   // pero esa es la copia de PORTADA (index.html) — que Fernando dejó
   // genérica a propósito — nunca se pinta acá.
   pintarNombreMision(datos.mision);
+  configurarNavBrief(datos.mision);
 
   // Se enlaza ANTES de pintar/cargar estado: cargarEstado() más abajo puede
   // sincronizar cl-timer por primera vez, y si el tiempo ya estaba agotado al
@@ -534,6 +535,47 @@ function pintarUsuarioActual(){
 // `mision` puede venir null (sesión de clase sin misión asignada todavía —
 // configuración pendiente del docente, no error del estudiante): texto
 // neutro en vez de dejar el "—"/vacío del HTML original o un error.
+// Brief de la misión (P9, plan-motor-misiones.md) — de solo lectura, fijo y
+// primero en #nav-salas, nunca cuenta como sala. `briefActual` guarda lo
+// pintable; null cuando la misión no trae brief (CGC hoy, o cualquier misión
+// sin uno), caso en que el ítem del sidebar directamente no aparece.
+let briefActual = null;
+
+function configurarNavBrief(mision) {
+  const btn = $('nav-brief');
+  const contenido = String(mision?.brief_contenido || '').trim();
+  if (!btn || !contenido) {
+    briefActual = null;
+    if (btn) setHidden(btn, true);
+    return;
+  }
+  briefActual = { titulo: mision.brief_titulo || 'Brief', contenido: mision.brief_contenido };
+  const tituloEl = $('nav-brief-titulo');
+  if (tituloEl) tituloEl.textContent = briefActual.titulo;
+  setHidden(btn, false);
+}
+
+function mostrarBrief() {
+  if (!briefActual) return;
+  estacionActual = null;
+  document.querySelectorAll('#nav-salas .estacion-card[data-estacion]').forEach((c) => c.setAttribute('aria-current', 'false'));
+  const btn = $('nav-brief');
+  if (btn) btn.setAttribute('aria-current', 'true');
+
+  setHidden($('panel-estacion-vacio'), true);
+  setHidden($('panel-estacion-contenido'), true);
+  const panel = $('panel-brief');
+  if (panel) panel.removeAttribute('hidden');
+
+  const h2 = $('brief-titulo');
+  if (h2) h2.textContent = briefActual.titulo;
+  pintarNarrativaEstacion($('brief-contenido'), briefActual.contenido);
+  if (h2) {
+    if (!h2.hasAttribute('tabindex')) h2.setAttribute('tabindex', '-1');
+    h2.focus();
+  }
+}
+
 function pintarNombreMision(mision){
   const titulo = (mision && mision.titulo) || 'Escape room de auditoría';
   const el = $('nombre-mision');
@@ -800,9 +842,12 @@ export async function seleccionarSala(estacionId) {
   document.querySelectorAll('#nav-salas .estacion-card[data-estacion]').forEach((c) => {
     c.setAttribute('aria-current', c === card ? 'true' : 'false');
   });
+  const navBrief = $('nav-brief');
+  if (navBrief) navBrief.setAttribute('aria-current', 'false');
 
-  // Mostrar el panel de contenido, ocultar el estado vacío inicial
+  // Mostrar el panel de contenido, ocultar el estado vacío inicial y el brief
   setHidden($('panel-estacion-vacio'), true);
+  setHidden($('panel-brief'), true);
   setHidden($('panel-estacion-contenido'), false);
 
   // Limpiar feedback previo de la sala anterior
@@ -1233,6 +1278,16 @@ let eventosEnlazados = false;
 function enlazarEventosUnaVez() {
   if (eventosEnlazados) return;
   eventosEnlazados = true;
+
+  // Brief de la misión (P9) — ítem fijo del sidebar, fuera de la delegación
+  // de abajo (no tiene data-estacion, no es .estacion-card).
+  const btnBrief = $('nav-brief');
+  if (btnBrief) {
+    btnBrief.addEventListener('click', () => {
+      mostrarBrief();
+      if (window.innerWidth < 768) cerrarMenuMobile();
+    });
+  }
 
   // Delegación para seleccionar sala desde la barra lateral (#nav-salas, §7.2)
   const lista = $('nav-salas');

@@ -192,9 +192,9 @@ export const Docente = {
 // arman los wrappers, mismo formato {datos,error} que el resto de api.js.
 export const Contenido = {
   async misiones() { return peticion('/api/docente/contenido/misiones', { method: 'GET' }); },
-  async crearMision({ slug, titulo, subtitulo, intro, codigo_maestro, veredicto }) {
+  async crearMision({ slug, titulo, subtitulo, intro, codigo_maestro, veredicto, brief_titulo, brief_contenido }) {
     if (!slug || !titulo || !veredicto) return { datos: null, error: { mensaje: 'Slug, título y veredicto son obligatorios.', codigo: 'dato_invalido', estado: 400 } };
-    return peticion('/api/docente/contenido/misiones', { method: 'POST', body: { slug, titulo, subtitulo, intro, codigo_maestro, veredicto } });
+    return peticion('/api/docente/contenido/misiones', { method: 'POST', body: { slug, titulo, subtitulo, intro, codigo_maestro, veredicto, brief_titulo, brief_contenido } });
   },
   async actualizarMision(id, payload) {
     if (!id) return { datos: null, error: { mensaje: 'Falta id.', codigo: 'parametros_faltantes', estado: 400 } };

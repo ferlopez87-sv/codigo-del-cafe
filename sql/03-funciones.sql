@@ -119,7 +119,10 @@ begin
     -- misión en su cabecera, y `misiones` es deny-all. mi_equipo() ya es
     -- SECURITY DEFINER, así que viaja por acá en vez de abrir una ruta nueva.
     -- Solo campos no-spoiler: nunca codigo_maestro ni veredicto.
-    'mision', (select jsonb_build_object('id', m.id, 'titulo', m.titulo, 'subtitulo', m.subtitulo, 'intro', m.intro)
+    -- brief_titulo/brief_contenido (P9, 2026-09-25): de solo lectura para el
+    -- estudiante, igual que el resto — no revelan ningún fragmento de código.
+    'mision', (select jsonb_build_object('id', m.id, 'titulo', m.titulo, 'subtitulo', m.subtitulo, 'intro', m.intro,
+                                          'brief_titulo', m.brief_titulo, 'brief_contenido', m.brief_contenido)
                from sesiones s join misiones m on m.id = s.mision_id
               where s.id = v_equipo.sesion_id)
   ) into v_out;

@@ -470,6 +470,7 @@ let vistaP5 = 'biblioteca'; // biblioteca | mision | reto
 
 // WYSIWYG acotado — instancias por campo
 let wysNarrativa = null, wysReto = null, wysFeedback = null;
+let wysBrief = null; // P9 — brief de la misión, vive en la Cabecera (Vista 2), no en una sala
 let wysPistas = []; // por indice
 
 function mostrarMensajeContenido(texto, tipo){
@@ -752,7 +753,15 @@ async function duplicarMision(id){
 }
 async function publicarMision(id){
   const {error} = await Contenido.publicarMision(id);
-  if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo publicar.'); return; }
+  if(error){
+    // P9 — el servidor rechaza publicar sin brief con {error:'brief_incompleto'};
+    // acá se traduce a un mensaje que dice qué falta, no un 400 genérico.
+    const mensaje = error.codigo==='brief_incompleto'
+      ? 'Completá el Brief (título y contenido) antes de publicar.'
+      : (error.mensaje||'No se pudo publicar.');
+    mostrarMensajeContenido(mensaje);
+    return;
+  }
   mostrarMensajeContenido('Misión publicada.', 'ok');
   await cargarBiblioteca();
   if(misionActivaP5?.id===id) await abrirMision(id);
@@ -776,6 +785,9 @@ async function abrirMision(id){
   $('mision-intro').value = m.intro||'';
   $('mision-veredicto').value = m.veredicto||'';
   $('mision-estado-badge').textContent = m.estado||'';
+  const briefTituloInput = $('mision-brief-titulo');
+  if(briefTituloInput) briefTituloInput.value = m.brief_titulo||'';
+  wysBrief = crearEditorEnriquecido('mision-brief-contenido-editor', m.brief_contenido||'');
   const autoChk=$('mision-codigo-auto');
   const codInput=$('mision-codigo-maestro');
   const efectivo=$('mision-codigo-efectivo');
@@ -1037,8 +1049,14 @@ async function guardarMisionP5(){
   const veredicto=$('mision-veredicto')?.value.trim();
   const autoChk=$('mision-codigo-auto')?.checked;
   const codigoRaw=$('mision-codigo-maestro')?.value.trim();
+  const briefTitulo=$('mision-brief-titulo')?.value.trim();
+  const briefContenido=wysBrief ? wysBrief.getValue() : '';
   if(!titulo||!veredicto){ mostrarMensajeContenido('Título y veredicto son obligatorios.'); return; }
-  const payload={ slug: misionActivaP5.slug, titulo, subtitulo: subtitulo||null, intro: intro||null, veredicto, codigo_maestro: autoChk? null : (codigoRaw||null) };
+  const payload={
+    slug: misionActivaP5.slug, titulo, subtitulo: subtitulo||null, intro: intro||null, veredicto,
+    codigo_maestro: autoChk? null : (codigoRaw||null),
+    brief_titulo: briefTitulo||null, brief_contenido: briefContenido||null,
+  };
   const {datos, error} = await Contenido.actualizarMision(misionActivaP5.id, payload);
   if(error){ mostrarMensajeContenido(error.mensaje||'No se pudo guardar la misión.'); return; }
   mostrarMensajeContenido('Misión guardada.', 'ok');
@@ -1502,11 +1520,9 @@ function enlazarEventosP5(){
     const inp=$('mision-codigo-maestro');
     if(inp) inp.disabled=e.target.checked;
   });
-  $('btn-publicar-mision')?.addEventListener('click', async ()=>{
+  $('btn-publicar-mision')?.addEventListener('click', ()=>{
     if(!misionActivaP5) return;
-    const {error}=await Contenido.publicarMision(misionActivaP5.id);
-    if(error) mostrarMensajeContenido(error.mensaje||'No se pudo publicar.');
-    else { mostrarMensajeContenido('Misión publicada.','ok'); await cargarBiblioteca(); await abrirMision(misionActivaP5.id); }
+    publicarMision(misionActivaP5.id);
   });
   $('btn-duplicar-mision')?.addEventListener('click', async ()=>{
     if(!misionActivaP5) return;

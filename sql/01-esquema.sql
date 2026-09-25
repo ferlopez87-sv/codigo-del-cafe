@@ -74,6 +74,21 @@ create table if not exists misiones (
   creada_en       timestamptz not null default now()
 );
 
+-- Brief de la misión (2026-09-25, plan-motor-misiones.md P9, a pedido de
+-- Fernando): "la página de instrucciones e introducción de la información de
+-- la compañía", editable como una sala pero sin reto. No es una fila de
+-- `estaciones` a propósito: si lo fuera, cada consumidor de `estaciones`
+-- (total_salas, composición del código maestro por fragmentos, el gate
+-- `desbloqueo:'tras_todas'`, "Probar sala") tendría que aprender a ignorarla.
+-- `alter` y no columna del `create table` de arriba por el mismo motivo que
+-- `sesiones.mision_id`: esa sentencia no corre en instalaciones existentes.
+-- Nullable a propósito: la obligatoriedad para publicar se aplica en la ruta
+-- (srv/rutas/contenido.js), no acá — así el backfill de CGC, publicada desde
+-- antes de que existiera el brief, no se rompe en una base que corra esta
+-- migración por primera vez.
+alter table misiones add column if not exists brief_titulo    text;
+alter table misiones add column if not exists brief_contenido text;
+
 create table if not exists sesiones (
   id                uuid primary key default gen_random_uuid(),
   nombre            text not null,

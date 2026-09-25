@@ -50,6 +50,24 @@ async function misionConMaestro(c, id) {
   return q.rows[0] || null;
 }
 
+// P9 (plan-motor-misiones.md) — "vacío real" para el gate de publicar: un
+// `<ul><li></li></ul>` sin texto tampoco cuenta como brief. Basta con pelar
+// las cuatro etiquetas de la lista blanca (nunca hay otras, ya las rechaza
+// validarFormatoAcotado) y mirar si queda algo después de recortar.
+function textoVacioTrasFormato(html) {
+  if (typeof html !== 'string') return true;
+  return html.replace(/<\/?(b|i|ul|li)>/g, '').trim().length === 0;
+}
+
+function campoInvalidoDeMision(b) {
+  if (b.brief_titulo !== undefined && b.brief_titulo !== null && typeof b.brief_titulo !== 'string') return 'brief_titulo';
+  if (b.brief_contenido !== undefined && b.brief_contenido !== null) {
+    if (typeof b.brief_contenido !== 'string') return 'brief_contenido';
+    if (!validarFormatoAcotado(b.brief_contenido)) return 'brief_contenido';
+  }
+  return null;
+}
+
 function campoInvalidoDeEstacion(b) {
   for (const campo of ['titulo', 'pilar', 'narrativa', 'reto', 'feedback_ok']) {
     if (typeof b[campo] !== 'string' || !b[campo].trim()) return campo;
@@ -95,13 +113,16 @@ router.post('/misiones', async (req, res) => {
   for (const campo of ['subtitulo', 'intro', 'codigo_maestro']) {
     if (b[campo] !== undefined && b[campo] !== null && typeof b[campo] !== 'string') return res.status(400).json({ error: 'dato_invalido', campo });
   }
+  const campoBrief = campoInvalidoDeMision(b);
+  if (campoBrief) return res.status(400).json({ error: 'dato_invalido', campo: campoBrief });
   try {
     const row = await conSesion(req.perfil.id, async (c) => {
       const q = await c.query(
-        `INSERT INTO misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado, autor_id)
-         VALUES ($1,$2,$3,$4,$5,$6,'borrador',$7) RETURNING id`,
+        `INSERT INTO misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado, autor_id, brief_titulo, brief_contenido)
+         VALUES ($1,$2,$3,$4,$5,$6,'borrador',$7,$8,$9) RETURNING id`,
         [b.slug.trim(), b.titulo.trim(), b.subtitulo?.trim() || null, b.intro?.trim() || null,
-          b.codigo_maestro?.trim() || null, b.veredicto.trim(), req.perfil.id]);
+          b.codigo_maestro?.trim() || null, b.veredicto.trim(), req.perfil.id,
+          b.brief_titulo?.trim() || null, b.brief_contenido?.trim() || null]);
       return misionConMaestro(c, q.rows[0].id);
     });
     res.json(row);
@@ -123,12 +144,14 @@ router.put('/misiones/:id', async (req, res) => {
   if (b.estado !== undefined && !['borrador', 'publicada', 'archivada'].includes(b.estado)) {
     return res.status(400).json({ error: 'dato_invalido', campo: 'estado' });
   }
+  const campoBrief = campoInvalidoDeMision(b);
+  if (campoBrief) return res.status(400).json({ error: 'dato_invalido', campo: campoBrief });
   try {
     const row = await conSesion(req.perfil.id, async (c) => {
-      const sets = ['slug=$1', 'titulo=$2', 'subtitulo=$3', 'intro=$4', 'codigo_maestro=$5', 'veredicto=$6'];
+      const sets = ['slug=$1', 'titulo=$2', 'subtitulo=$3', 'intro=$4', 'codigo_maestro=$5', 'veredicto=$6', 'brief_titulo=$7', 'brief_contenido=$8'];
       const vals = [b.slug.trim(), b.titulo.trim(), b.subtitulo?.trim() || null, b.intro?.trim() || null,
-        b.codigo_maestro?.trim() || null, b.veredicto.trim()];
-      let idx = 7;
+        b.codigo_maestro?.trim() || null, b.veredicto.trim(), b.brief_titulo?.trim() || null, b.brief_contenido?.trim() || null];
+      let idx = 9;
       if (b.estado !== undefined) { sets.push(`estado=$${idx}`); vals.push(b.estado); idx++; }
       vals.push(req.params.id);
       const q = await c.query(`UPDATE misiones SET ${sets.join(', ')} WHERE id=$${idx} RETURNING id`, vals);
@@ -174,9 +197,9 @@ router.post('/misiones/:id/duplicar', async (req, res) => {
       const m = orig.rows[0];
       const slugNuevo = `${m.slug}-copia-${crypto.randomBytes(3).toString('hex')}`;
       const ins = await c.query(
-        `INSERT INTO misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado, autor_id)
-         VALUES ($1,$2,$3,$4,$5,$6,'borrador',$7) RETURNING *`,
-        [slugNuevo, m.titulo, m.subtitulo, m.intro, m.codigo_maestro, m.veredicto, req.perfil.id]);
+        `INSERT INTO misiones (slug, titulo, subtitulo, intro, codigo_maestro, veredicto, estado, autor_id, brief_titulo, brief_contenido)
+         VALUES ($1,$2,$3,$4,$5,$6,'borrador',$7,$8,$9) RETURNING *`,
+        [slugNuevo, m.titulo, m.subtitulo, m.intro, m.codigo_maestro, m.veredicto, req.perfil.id, m.brief_titulo, m.brief_contenido]);
       const misionNueva = ins.rows[0];
 
       const salas = await c.query('SELECT * FROM estaciones WHERE mision_id=$1 ORDER BY orden', [req.params.id]);
@@ -195,16 +218,28 @@ router.post('/misiones/:id/duplicar', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'error_interno' }); }
 });
 
+// P9 (plan-motor-misiones.md): el brief es obligatorio para publicar, pero
+// SOLO en la transición a 'publicada' — una misión que ya está publicada
+// (CGC, o cualquiera republicada tras un cambio de salas) no vuelve a
+// evaluarse por esto, así el backfill sin brief no queda inservible.
 router.post('/misiones/:id/publicar', async (req, res) => {
   if (!exigirSuperAdmin(req, res)) return;
   try {
-    const row = await conSesion(req.perfil.id, async (c) => {
+    const resultado = await conSesion(req.perfil.id, async (c) => {
+      const actual = await c.query('SELECT estado, brief_titulo, brief_contenido FROM misiones WHERE id=$1', [req.params.id]);
+      if (!actual.rows.length) return 'no_encontrada';
+      const m = actual.rows[0];
+      if (m.estado !== 'publicada') {
+        if (!m.brief_titulo || !m.brief_titulo.trim() || textoVacioTrasFormato(m.brief_contenido)) {
+          return 'brief_incompleto';
+        }
+      }
       const q = await c.query("UPDATE misiones SET estado='publicada' WHERE id=$1 RETURNING id", [req.params.id]);
-      if (!q.rows.length) return null;
       return misionConMaestro(c, q.rows[0].id);
     });
-    if (!row) return res.status(404).json({ error: 'no_encontrada' });
-    res.json(row);
+    if (resultado === 'no_encontrada') return res.status(404).json({ error: 'no_encontrada' });
+    if (resultado === 'brief_incompleto') return res.status(400).json({ error: 'brief_incompleto' });
+    res.json(resultado);
   } catch (e) { console.error(e); res.status(500).json({ error: 'error_interno' }); }
 });
 

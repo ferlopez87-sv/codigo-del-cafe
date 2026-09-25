@@ -175,7 +175,13 @@ body{background:#121212;color:#e5e2e1}
 <template id="tpl-nav-sala">
 <button class="nav-sala estacion-card is-pendiente w-full text-left rounded-lg my-1 p-3 flex items-center justify-between group text-on-surface-variant hover:bg-surface-container-high transition-all" aria-current="false"><span class="flex items-center gap-3"><span class="material-symbols-outlined text-[18px]" aria-hidden="true" data-rol="icono">help</span><span><span class="font-label-sm text-label-sm uppercase block" data-rol="orden">Sala</span><span class="font-evidence-data text-xs" data-rol="titulo"></span></span></span><span class="estacion-card__estado font-label-sm text-[10px] uppercase border border-audit-border px-2 py-1 rounded" data-rol="estado">○ Pendiente</span></button>
 </template>
-<nav id="nav-salas" aria-label="Salas de la auditoría" class="flex-1 overflow-y-auto px-4 space-y-1"></nav>
+<nav id="nav-salas" aria-label="Salas de la auditoría" class="flex-1 overflow-y-auto px-4 space-y-1">
+<!-- Brief de la misión (P9, plan-motor-misiones.md): fijo, primero, NO clonado
+     de <template id="tpl-nav-sala"> — no es una estación, sin data-estacion,
+     no participa del filtro de .estacion-card[data-estacion]. js/juego.js lo
+     oculta si mision.brief_contenido llega vacío/null. -->
+<button id="nav-brief" type="button" hidden class="w-full text-left rounded-lg my-1 p-3 flex items-center gap-3 text-on-surface-variant hover:bg-surface-container-high transition-all" aria-current="false"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">info</span><span id="nav-brief-titulo" class="font-evidence-data text-xs">Brief</span></button>
+</nav>
  <div class="px-6 mt-auto pt-6 border-t border-audit-border"><a href="index.html" class="w-full bg-surface-graphite border border-audit-border text-on-surface-variant hover:text-primary hover:border-primary font-evidence-data text-evidence-data uppercase py-3 flex justify-center items-center gap-2 no-underline"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir</a></div>
 </nav>
 <div id="backdrop-mobile" hidden class="fixed inset-0 bg-black/50 z-20 md:hidden" aria-hidden="true"></div>
@@ -206,6 +212,14 @@ body{background:#121212;color:#e5e2e1}
 <h2 id="dashboard-titulo" class="sr-only" tabindex="-1">Tablero de la auditoría</h2>
 <div id="panel-estacion" class="flex-1 overflow-y-auto p-8 bg-surface" aria-live="polite">
 <div id="panel-estacion-vacio" class="max-w-3xl mx-auto text-center py-12"><span class="material-symbols-outlined text-4xl text-on-surface-variant opacity-50" aria-hidden="true">search</span><p class="font-body-md text-on-surface-variant mt-2">Elegí una sala en la barra lateral para empezar a auditar.</p><p id="aviso-desbloqueo-final" hidden class="font-label-sm text-label-sm text-on-surface-variant/70 mt-1"></p></div>
+<!-- Brief de la misión (P9): de solo lectura, sin reto ni pistas ni botón de
+     verificar. js/juego.js lo pinta con pintarNarrativaEstacion (mismo módulo
+     que la narrativa de la sala, nunca innerHTML, §14.4 del contrato). -->
+<div id="panel-brief" hidden class="max-w-3xl mx-auto">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-primary border border-primary px-2 py-1" aria-hidden="true">Expediente_Brief</span>
+<h2 id="brief-titulo" tabindex="-1" class="font-headline-lg text-headline-lg mt-3">Brief</h2>
+<div id="brief-contenido" class="mt-4 font-body-md text-on-surface-variant leading-relaxed"></div>
+</div>
 <div id="panel-estacion-contenido" hidden class="max-w-3xl mx-auto">
 <span class="font-label-sm text-label-sm uppercase tracking-widest text-primary border border-primary px-2 py-1" aria-hidden="true">Expediente_Sala</span>
 <h2 id="estacion-titulo" tabindex="-1" class="font-headline-lg text-headline-lg mt-3">Estación</h2>
