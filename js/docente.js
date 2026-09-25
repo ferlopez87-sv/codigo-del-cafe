@@ -579,9 +579,27 @@ function crearEditorEnriquecido(contId, valorInicial){
     btn.textContent=b.label;
     btn.title=b.title;
     btn.className='px-2 py-1 border border-audit-border text-xs hover:border-primary hover:text-primary';
+    // P11-b — sin esto el mousedown le pasa el foco al botón, el editor pierde
+    // la selección y execCommand actúa al inicio (Lista: "dosuno"; B: nada).
+    btn.addEventListener('mousedown', e=>e.preventDefault());
     btn.addEventListener('click', ()=>{
-      editable.focus();
+      if(document.activeElement!==editable) editable.focus(); // respaldo (teclado, foco perdido)
       document.execCommand(b.cmd, false, null);
+      // Chrome deja el caret al inicio del ítem dentro del propio execCommand
+      // (medido: "uno"@3 → "uno"@0), así que Enter partía antes del texto y daba
+      // <li><br></li><li>dosuno</li>. Con selección de varias líneas no se toca.
+      if(b.cmd==='insertUnorderedList'){
+        const sel=window.getSelection();
+        let li=sel.anchorNode;
+        while(li && li!==editable && li.nodeName!=='LI') li=li.parentNode;
+        if(sel.isCollapsed && li && li.nodeName==='LI' && li.textContent!==''){
+          const r=document.createRange();
+          r.selectNodeContents(li);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      }
       editable.dispatchEvent(new Event('input', {bubbles:true}));
     });
     toolbar.appendChild(btn);
