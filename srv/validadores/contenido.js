@@ -103,88 +103,114 @@ function validarInteraccion(obj) {
 // Requisitos 4-7: forma de `estaciones.respuesta` (§1.2) más integridad
 // referencial (todo id en `valor`/`cierre` existe en `interaccion`) y
 // completitud, ambas cruzadas contra la `interaccion` de la misma sala.
-function validarRespuesta(obj, interaccion) {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
-  if (Object.keys(obj).length === 0) return false;
-  if (!interaccion || !TIPOS.includes(interaccion.tipo)) return false;
+// Devuelve `null` si la respuesta sirve, o el motivo concreto por el que no:
+// `respuesta_vacia` · `id_inexistente` · `cierre_faltante` · `cierre_sobrante`
+// · `cierre_invalido` · `rango_invalido` · `orden_incompleto`
+// · `clasificacion_incompleta` · `formato`. Son un contrato con Frontend EsC:
+// no se renombran, no se agregan y no se reinterpretan.
+function motivoRespuestaInvalida(obj, interaccion) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return 'respuesta_vacia';
+  if (Object.keys(obj).length === 0) return 'respuesta_vacia';
+  // La interacción ya se validó aparte: si llega rota, el problema no es de la
+  // respuesta y no hay a qué atribuirle un motivo más específico.
+  if (!interaccion || !TIPOS.includes(interaccion.tipo)) return 'formato';
 
   // Req. 4, mitad `cierre`: si la interaccion no define cierre, la respuesta
   // tampoco debe traer uno — no hay contra qué validarlo referencialmente.
   if (interaccion.cierre === undefined) {
-    if (obj.cierre !== undefined) return false;
+    if (obj.cierre !== undefined) return 'cierre_sobrante';
   } else {
-    if (!esTextoNoVacio(obj.cierre)) return false;
-    if (!idsDe(interaccion.cierre.opciones).has(obj.cierre)) return false;
+    if (!esTextoNoVacio(obj.cierre)) return 'cierre_faltante';
+    if (!idsDe(interaccion.cierre.opciones).has(obj.cierre)) return 'cierre_invalido';
   }
 
   const tipo = interaccion.tipo;
 
   if (tipo === 'opcion_unica') {
-    if (!esTextoNoVacio(obj.valor)) return false;
-    return idsDe(interaccion.opciones).has(obj.valor); // req. 4
+    if (!esTextoNoVacio(obj.valor)) return 'respuesta_vacia';
+    return idsDe(interaccion.opciones).has(obj.valor) ? null : 'id_inexistente'; // req. 4
   }
 
   if (tipo === 'respuesta_corta') {
     if (interaccion.modo === 'texto') {
-      if (!esTextoNoVacio(obj.valor)) return false;
-      if (obj.acepta !== undefined && (!Array.isArray(obj.acepta) || !obj.acepta.every(esTextoNoVacio))) return false;
-      if (obj.min !== undefined || obj.max !== undefined) return false; // rango: solo modo numero
-      return true;
+      if (!esTextoNoVacio(obj.valor)) return 'respuesta_vacia';
+      if (obj.acepta !== undefined && (!Array.isArray(obj.acepta) || !obj.acepta.every(esTextoNoVacio))) return 'formato';
+      // `rango_invalido` es del modo numero: acá un min/max es un campo que no
+      // pertenece a una respuesta de texto libre, no un rango mal formado.
+      if (obj.min !== undefined || obj.max !== undefined) return 'formato';
+      return null;
     }
     // modo numero — req. 7: valor(+acepta) XOR min/max, nunca ambos ni ninguno.
     const tieneValor = obj.valor !== undefined;
     const tieneRango = obj.min !== undefined || obj.max !== undefined;
-    if (tieneValor === tieneRango) return false;
+    // "Los dos a la vez" y "ninguno de los dos" son el mismo defecto, y el
+    // contrato lo nombra en `rango_invalido`, no en `respuesta_vacia`.
+    if (tieneValor === tieneRango) return 'rango_invalido';
     if (tieneValor) {
-      if (!esNumero(obj.valor)) return false;
-      if (obj.acepta !== undefined && (!Array.isArray(obj.acepta) || obj.acepta.length === 0 || !obj.acepta.every(esNumero))) return false;
-      return true;
+      if (!esNumero(obj.valor)) return 'formato';
+      if (obj.acepta !== undefined && (!Array.isArray(obj.acepta) || obj.acepta.length === 0 || !obj.acepta.every(esNumero))) return 'formato';
+      return null;
     }
-    if (!esNumero(obj.min) || !esNumero(obj.max) || obj.min > obj.max) return false;
-    if (obj.acepta !== undefined) return false;
-    return true;
+    if (!esNumero(obj.min) || !esNumero(obj.max) || obj.min > obj.max) return 'rango_invalido';
+    if (obj.acepta !== undefined) return 'formato';
+    return null;
   }
 
   if (tipo === 'orden') {
     // Req. 5: `valor` es permutación completa de los ids de `items`.
-    if (!Array.isArray(obj.valor)) return false;
+    if (obj.valor === undefined || obj.valor === null) return 'respuesta_vacia';
+    if (!Array.isArray(obj.valor)) return 'formato';
     const idsItems = idsDe(interaccion.items);
-    if (obj.valor.length !== idsItems.size) return false;
+    if (obj.valor.length !== idsItems.size) return 'orden_incompleto';
     const vistos = new Set();
     for (const id of obj.valor) {
-      if (!idsItems.has(id) || vistos.has(id)) return false;
+      if (!idsItems.has(id)) return 'id_inexistente';
+      if (vistos.has(id)) return 'formato'; // repetido: el id sí existe
       vistos.add(id);
     }
-    return true;
+    return null;
   }
 
   if (tipo === 'checklist') {
     // Req. 4: cada id de `valor` existe en `items`; ids únicos, al menos uno.
-    if (!Array.isArray(obj.valor) || obj.valor.length === 0) return false;
+    if (obj.valor === undefined || obj.valor === null) return 'respuesta_vacia';
+    if (!Array.isArray(obj.valor)) return 'formato';
+    if (obj.valor.length === 0) return 'respuesta_vacia';
     const idsItems = idsDe(interaccion.items);
     const vistos = new Set();
     for (const id of obj.valor) {
-      if (!idsItems.has(id) || vistos.has(id)) return false;
+      if (!idsItems.has(id)) return 'id_inexistente';
+      if (vistos.has(id)) return 'formato';
       vistos.add(id);
     }
-    return true;
+    return null;
   }
 
   if (tipo === 'clasificacion') {
     // Req. 6: una entrada por ítem, cada valor es un id de categoría válido.
-    if (!obj.valor || typeof obj.valor !== 'object' || Array.isArray(obj.valor)) return false;
+    if (obj.valor === undefined || obj.valor === null) return 'respuesta_vacia';
+    if (typeof obj.valor !== 'object' || Array.isArray(obj.valor)) return 'formato';
     const idsItems = idsDe(interaccion.items);
     const idsCategorias = idsDe(interaccion.categorias);
     const claves = Object.keys(obj.valor);
-    if (claves.length !== idsItems.size) return false;
+    if (claves.length !== idsItems.size) return 'clasificacion_incompleta';
     for (const itemId of claves) {
-      if (!idsItems.has(itemId)) return false;
-      if (!idsCategorias.has(obj.valor[itemId])) return false; // req. 4
+      if (!idsItems.has(itemId)) return 'id_inexistente';
+      // El ítem sí existe y lo que falta es su categoría: eso lo nombra
+      // `clasificacion_incompleta`, no `id_inexistente`.
+      if (!idsCategorias.has(obj.valor[itemId])) return 'clasificacion_incompleta'; // req. 4
     }
-    return true;
+    return null;
   }
 
-  return false;
+  return 'formato';
+}
+
+// La forma de la respuesta no cambió con P12-B: lo único nuevo es el motivo que
+// se informa. Este wrapper queda para que las rutas y las pruebas que solo
+// necesitan el sí/no sigan igual.
+function validarRespuesta(obj, interaccion) {
+  return motivoRespuestaInvalida(obj, interaccion) === null;
 }
 
 // Requisito 8: `estaciones.visual` (§1.6). `null`/`undefined` ⇒ sin gráfico,
@@ -299,7 +325,7 @@ function validarFormatoAcotado(texto) {
 }
 
 export {
-  validarInteraccion, validarRespuesta, validarVisual,
+  validarInteraccion, validarRespuesta, motivoRespuestaInvalida, validarVisual,
   formaValidaDeDato, validarDatos, validarCodigo, validarDesbloqueo,
   validarFormatoAcotado, TAGS_FORMATO_ACOTADO,
   TIPOS, TIPOS_VISUAL, DESBLOQUEOS,

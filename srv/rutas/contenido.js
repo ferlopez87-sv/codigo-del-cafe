@@ -9,7 +9,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { conSesion } from '../db.js';
 import {
-  validarInteraccion, validarRespuesta, validarVisual,
+  validarInteraccion, validarRespuesta, motivoRespuestaInvalida, validarVisual,
   validarDatos, validarCodigo, validarDesbloqueo, validarFormatoAcotado,
 } from '../validadores/contenido.js';
 
@@ -87,6 +87,18 @@ function campoInvalidoDeEstacion(b) {
   if (b.icono !== undefined && b.icono !== null && typeof b.icono !== 'string') return 'icono';
   if (!validarVisual(b.visual === undefined ? null : b.visual)) return 'visual';
   return null;
+}
+
+// P12-B: cuando lo que falla es la respuesta correcta, el 400 suma el motivo
+// concreto para que el docente sepa qué corregir sin adivinar. Es un campo
+// nuevo y opcional: `error` y `campo` no cambian para ningún otro endpoint.
+function cuerpoDatoInvalido(campo, b) {
+  const cuerpo = { error: 'dato_invalido', campo };
+  if (campo === 'respuesta') {
+    const motivo = motivoRespuestaInvalida(b.respuesta, b.interaccion);
+    if (motivo) cuerpo.motivo = motivo;
+  }
+  return cuerpo;
 }
 
 // -----------------------------------------------------------------------------
@@ -268,7 +280,7 @@ router.post('/misiones/:id/estaciones', async (req, res) => {
   if (!exigirSuperAdmin(req, res)) return;
   const b = req.body || {};
   const campo = campoInvalidoDeEstacion(b);
-  if (campo) return res.status(400).json({ error: 'dato_invalido', campo });
+  if (campo) return res.status(400).json(cuerpoDatoInvalido(campo, b));
   try {
     const row = await conSesion(req.perfil.id, async (c) => {
       const mision = await c.query('SELECT id FROM misiones WHERE id=$1', [req.params.id]);
@@ -339,7 +351,7 @@ router.put('/estaciones/:id', async (req, res) => {
   if (!exigirSuperAdmin(req, res)) return;
   const b = req.body || {};
   const campo = campoInvalidoDeEstacion(b);
-  if (campo) return res.status(400).json({ error: 'dato_invalido', campo });
+  if (campo) return res.status(400).json(cuerpoDatoInvalido(campo, b));
   try {
     const row = await conSesion(req.perfil.id, async (c) => {
       const q = await c.query(
