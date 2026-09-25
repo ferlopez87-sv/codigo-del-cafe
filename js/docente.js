@@ -661,7 +661,11 @@ function crearEditorEnriquecido(contId, valorInicial){
   // apuntando al nodo ya destruido, y Chrome arrastra su estilo de tipeo
   // desde ahí. Se arma una selección nueva, colapsada al inicio del div ya
   // limpio, para que lo próximo que se tipee no herede nada.
-  editable.addEventListener('input', ()=>{
+  // P11-c — solo tras un borrado: "• Lista" con el editor vacío crea un
+  // <ul><li><br></li></ul> legítimo y su input nativo (insertUnorderedList)
+  // lo destruía en el acto. El input sintético del botón no trae inputType.
+  editable.addEventListener('input', (ev)=>{
+    if(!String(ev.inputType||'').startsWith('delete')) return;
     if(editable.textContent.trim()) return;
     const html = editable.innerHTML;
     if(html==='' || html==='<br>') return;
